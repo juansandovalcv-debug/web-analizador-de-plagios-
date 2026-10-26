@@ -1,0 +1,64 @@
+﻿@page "/Error"
+@layout MainLayout
+@using System.Diagnostics
+
+<PageTitle>Error · Analizador de Plagios</PageTitle>
+
+<div class="page-header">
+    <div>
+        <span class="eyebrow">Error controlado</span>
+        <h1>Algo salió mal</h1>
+        <p class="page-subtitle">La aplicación no pudo completar esta operación. El detalle técnico se registró en la consola local; no se envió información a servicios externos.</p>
+    </div>
+</div>
+
+<div class="alert alert-error">
+    <Icon Nombre="alert" Tamano="18" />
+    <div>
+        <strong>La solicitud no pudo procesarse.</strong>
+        <div class="small">Puede volver al inicio y reintentar. Si el problema se repite, revise los registros de la aplicación y el archivo <code>sistema_plagio.db</code>.</div>
+    </div>
+</div>
+
+<section class="panel mt-2">
+    <div class="panel-heading">
+        <div>
+            <h3><Icon Nombre="info" Tamano="17" /> Diagnóstico</h3>
+            <p>Datos útiles para ubicar el incidente en los registros.</p>
+        </div>
+    </div>
+
+    <div class="summary-list">
+        <div class="summary-row">
+            <span>Identificador de la solicitud</span>
+            <strong class="mono wrap">@(RequestId ?? "No disponible")</strong>
+        </div>
+        <div class="summary-row">
+            <span>Entorno</span>
+            <strong>Local-first · SQLite</strong>
+        </div>
+        <div class="summary-row">
+            <span>Datos del usuario</span>
+            <strong>Sin envío a terceros</strong>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <a class="btn btn-primary btn-sm" href="">
+            <Icon Nombre="home" Tamano="14" /> Volver al inicio
+        </a>
+        <a class="btn btn-ghost btn-sm" href="resultados">
+            <Icon Nombre="list" Tamano="14" /> Resultados
+        </a>
+    </div>
+</section>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

@@ -1,0 +1,29 @@
+﻿@page "/not-found"
+@layout MainLayout
+
+<PageTitle>Página no encontrada · Analizador de Plagios</PageTitle>
+
+<div class="page-header">
+    <div>
+        <span class="eyebrow">Error 404</span>
+        <h1>No encontramos esta página</h1>
+        <p class="page-subtitle">La dirección solicitada no existe o el contenido fue movido. Sus datos locales siguen intactos.</p>
+    </div>
+</div>
+
+<div class="empty-state">
+    <Icon Nombre="search" Tamano="38" />
+    <strong>La ruta no está disponible</strong>
+    <span>Verifique el enlace o utilice uno de los módulos del menú lateral. Los análisis, grupos y respaldos no se ven afectados.</span>
+    <div class="row mt-2">
+        <a class="btn btn-primary btn-sm" href="">
+            <Icon Nombre="home" Tamano="14" /> Ir al inicio
+        </a>
+        <a class="btn btn-ghost btn-sm" href="resultados">
+            <Icon Nombre="list" Tamano="14" /> Ver resultados
+        </a>
+        <a class="btn btn-ghost btn-sm" href="grupos">
+            <Icon Nombre="users" Tamano="14" /> Gestionar grupos
+        </a>
+    </div>
+</div>

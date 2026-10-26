@@ -1,0 +1,693 @@
+@page "/resultados/{Id:int}"
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject AnalizadorSimilitud Similitud
+@inject GeneradorQuizDefensa Quiz
+@inject PreferenciasUi Prefs
+@inject IJSRuntime JS
+@inject ILogger<ResultadoDetalle> Logger
+
+<PageTitle>Resultado #@Id · Analizador de Plagios</PageTitle>
+
+<div class="row mb-2">
+    <a class="link-action" href="resultados">
+        <Icon Nombre="arrow-left" Tamano="14" /> Volver a resultados
+    </a>
+    <span class="dot-separator">·</span>
+    <span class="tiny muted">Evaluación #@Id</span>
+</div>
+
+@if (_cargando)
+{
+    <div class="loading-state"><span class="spinner large"></span> Cargando el análisis…</div>
+}
+else if (_evaluacion is null)
+{
+    <div class="empty-state">
+        <Icon Nombre="alert" Tamano="34" />
+        <strong>El resultado no existe</strong>
+        <span>@(_error ?? "Es posible que la evaluación haya sido eliminada junto con su grupo.")</span>
+        <a class="btn btn-ghost btn-sm mt-2" href="resultados">Volver a resultados</a>
+    </div>
+}
+else
+{
+    if (Prefs.ModoCiego)
+    {
+        <div class="blind-banner">
+            <Icon Nombre="eye-off" Tamano="17" />
+            <span>Modo a ciegas activo: la identidad del estudiante y de la referencia están ocultas. La descarga de la ficha usa los datos reales para el expediente.</span>
+        </div>
+    }
+
+    <section class="result-hero">
+        <div class="result-title-card">
+            <span class="eyebrow">Resultado del análisis</span>
+            <h1>@_evaluacion.NombreArchivo</h1>
+            <div class="row">
+                <span class="badge @ClaseBadge(_evaluacion.NivelRiesgo)">Riesgo @_evaluacion.NivelRiesgo.ToLowerInvariant()</span>
+                <span class="chip">@_evaluacion.OrigenArchivo</span>
+                <span class="chip">@_evaluacion.FechaAnalisis.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                @if (_evaluacion.ConfianzaOcr > 0)
+                {
+                    <span class="chip chip-warn">OCR @_evaluacion.ConfianzaOcr.ToString("F1")%</span>
+                }
+            </div>
+
+            <div class="student-identity">
+                <div class="avatar">@Iniciales(_evaluacion.Estudiante?.Nombre)</div>
+                <div>
+                    <strong>@NombreEstudiante</strong>
+                    <span>@CarnetEstudiante</span>
+                </div>
+            </div>
+
+            <div class="group-meta-line">
+                <span class="chip">@_evaluacion.Grupo?.Nombre</span>
+                <span class="chip">@_evaluacion.Grupo?.Ciclo @_evaluacion.Grupo?.Anio</span>
+                <span class="chip">Cómputo @_evaluacion.Grupo?.Computo</span>
+                <span class="chip">@_evaluacion.LineasCodigo línea(s)</span>
+            </div>
+        </div>
+
+        <div class="gauge-stack">
+            <Medidor Valor="@_evaluacion.Similitud" Titulo="Similitud estructural"
+                      Subtitulo="Levenshtein de tokens, shingles y líneas" Tipo="similitud" />
+            <Medidor Valor="@_evaluacion.ProbabilidadIA" Titulo="Probabilidad de IA"
+                      Subtitulo="Señal heurística explicable, no concluyente" Tipo="ia" />
+            <div class="risk-strip">
+                <span>Referencia</span>
+                @if (_referencia is not null)
+                {
+                    <strong>@NombreReferencia</strong>
+                }
+                else if (!string.IsNullOrWhiteSpace(_resumen?.ReferenciaEstudiante))
+                {
+                    <strong>@Prefs.NombreVisible(_resumen.MejoresCoincidencias.FirstOrDefault()?.EstudianteId ?? 0, _resumen.ReferenciaEstudiante!)</strong>
+                }
+                else
+                {
+                    <strong>Sin comparación</strong>
+                }
+            </div>
+        </div>
+    </section>
+
+    <div class="tabs">
+        <button type="button" class="tab-btn @(_tab == "resumen" ? "active" : null)" @onclick='() => _tab = "resumen"'>
+            <Icon Nombre="list" Tamano="15" /> Resumen
+        </button>
+        <button type="button" class="tab-btn @(_tab == "diff" ? "active" : null)" @onclick='() => _tab = "diff"'>
+            <Icon Nombre="code" Tamano="15" /> Diff
+            @if (_diff is not null)
+            {
+                <span class="count">@_diff.Filas.Count</span>
+            }
+        </button>
+        <button type="button" class="tab-btn @(_tab == "metadatos" ? "active" : null)" @onclick='() => _tab = "metadatos"'>
+            <Icon Nombre="search" Tamano="15" /> Metadatos
+        </button>
+        <button type="button" class="tab-btn @(_tab == "quiz" ? "active" : null)" @onclick='() => _tab = "quiz"'>
+            <Icon Nombre="book" Tamano="15" /> Quiz de defensa
+            @if (_ficha is not null)
+            {
+                <span class="count">@_ficha.Preguntas.Count</span>
+            }
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_mensaje))
+    {
+        <div class="alert alert-success"><Icon Nombre="check" Tamano="17" /><span>@_mensaje</span></div>
+    }
+
+    @if (_tab == "resumen")
+    {
+        <div class="grid-sidebar">
+            <div class="stack">
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3><Icon Nombre="scale" Tamano="17" /> Similitud y coincidencias</h3>
+                            <p>Resultado de la comparación con la referencia más cercana del grupo.</p>
+                        </div>
+                        @if (_resumen?.ReferenciaEvaluacionId is int referenciaId)
+                        {
+                            <a class="btn btn-ghost btn-sm" href="@($"resultados/{referenciaId}")">
+                                <Icon Nombre="external" Tamano="14" /> Ver referencia
+                            </a>
+                        }
+                    </div>
+
+                    <div class="row mb-2">
+                        <span class="chip chip-accent">Total <b>@_evaluacion.Similitud.ToString("F1")%</b></span>
+                        <span class="chip">Tokens <b>@((_resumen?.SimilitudTokens ?? 0).ToString("F1"))%</b></span>
+                        <span class="chip">Shingles <b>@((_resumen?.JaccardShingles ?? 0).ToString("F1"))%</b></span>
+                        <span class="chip">Líneas <b>@((_resumen?.SimilitudLineas ?? 0).ToString("F1"))%</b></span>
+                        <span class="chip">Distancia tokens <b>@(_resumen?.DistanciaTokens ?? 0)</b></span>
+                    </div>
+
+                    @if (_referencia is not null)
+                    {
+                        <div class="reference-box">
+                            <Icon Nombre="file" Tamano="17" />
+                            <div class="grow">
+                                <div>
+                                    La entrega se comparó con <a href="@($"resultados/{_referencia.Id}")"><strong>@NombreReferencia</strong></a>
+                                    (@_referencia.NombreArchivo).
+                                </div>
+                                <div class="tiny muted">@_referencia.OrigenArchivo · @_referencia.FechaAnalisis.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="empty-mini">No hay una entrega de referencia asociada a este análisis.</div>
+                    }
+
+                    @if (_resumen is not null && _resumen.MejoresCoincidencias.Count > 1)
+                    {
+                        <div class="form-divider"></div>
+                        <h4 class="mb-2">Otras coincidencias del corpus</h4>
+                        <div class="summary-list">
+                            @foreach (var coincidencia in _resumen.MejoresCoincidencias.Skip(_referencia is null ? 0 : 1).Take(4))
+                            {
+                                <div class="summary-row">
+                                    <span>
+                                        @Prefs.NombreVisible(coincidencia.EstudianteId, coincidencia.EstudianteNombre)
+                                        <span class="tiny muted">· @coincidencia.Archivo</span>
+                                    </span>
+                                    <strong class="row" style="justify-content: flex-end; gap: 8px;">
+                                        @coincidencia.Porcentaje.ToString("F1")%
+                                        @if (coincidencia.EvaluacionId > 0)
+                                        {
+                                            <a class="btn btn-ghost btn-sm" href="@($"resultados/{coincidencia.EvaluacionId}")">Abrir</a>
+                                        }
+                                    </strong>
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3><Icon Nombre="sparkles" Tamano="17" /> Señales de generación automática</h3>
+                            <p>@(_ia?.Resumen ?? "No hay un análisis de IA guardado para esta entrega.")</p>
+                        </div>
+                        @if (_ia is not null)
+                        {
+                            <span class="badge @ClaseIa(_ia.Nivel)">@_ia.Nivel · @_ia.Probabilidad.ToString("F1")%</span>
+                        }
+                    </div>
+
+                    @if (_ia is null)
+                    {
+                        <div class="empty-mini">Este registro se creó sin un análisis de IA asociado.</div>
+                    }
+                    else
+                    {
+                        <div class="ai-indicators">
+                            @foreach (var indicador in _ia.Indicadores)
+                            {
+                                var mitigante = indicador.Aporte < 0;
+                                <div class="indicator @(mitigante ? "mitigante" : null)">
+                                    <div class="indicator-icon">
+                                        <Icon Nombre="@(mitigante ? "check" : "sparkles")" Tamano="15" />
+                                    </div>
+                                    <div class="indicator-body">
+                                        <strong>@indicador.Nombre</strong>
+                                        <p>@indicador.Descripcion</p>
+                                        @if (!string.IsNullOrWhiteSpace(indicador.Evidencia))
+                                        {
+                                            <div class="indicator-evidence">@indicador.Evidencia</div>
+                                        }
+                                    </div>
+                                    <span class="indicator-points">@indicador.Aporte.ToString("+0.#;-0.#;0")</span>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="metadata-note mt-2">
+                            <Icon Nombre="info" Tamano="15" />
+                            <span>La probabilidad de IA es una estimación heurística basada en estilo, comentarios y estructura. No constituye prueba de fraude por sí sola.</span>
+                        </div>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3><Icon Nombre="target" Tamano="17" /> Métricas del código</h3>
+                            <p>Estructura detectada con Roslyn y normalización del texto.</p>
+                        </div>
+                    </div>
+
+                    <div class="grid-3">
+                        <div class="computo-card">
+                            <span>Líneas de código</span>
+                            <strong>@_evaluacion.LineasCodigo</strong>
+                            <small>@_evaluacion.TamanoBytes.ToString("N0") bytes</small>
+                        </div>
+                        <div class="computo-card">
+                            <span>Métodos</span>
+                            <strong>@_evaluacion.Metodos</strong>
+                            <small>@_evaluacion.Condicionales condicional(es)</small>
+                        </div>
+                        <div class="computo-card">
+                            <span>Bucles</span>
+                            <strong>@_evaluacion.Bucles</strong>
+                            <small>Control de flujo</small>
+                        </div>
+                    </div>
+
+                    @if (_ia is not null)
+                    {
+                        <div class="form-divider"></div>
+                        <div class="summary-list">
+                            <div class="summary-row"><span>Densidad de comentarios</span><strong>@(_ia.Metricas.DensidadComentarios.ToString("F1"))%</strong></div>
+                            <div class="summary-row"><span>Longitud media de línea</span><strong>@_ia.Metricas.PromedioLongitudLinea.ToString("F1") caracteres</strong></div>
+                            <div class="summary-row"><span>Desviación de longitud</span><strong>@_ia.Metricas.DesviacionLongitudLinea.ToString("F1")</strong></div>
+                            <div class="summary-row"><span>Identificadores genéricos</span><strong>@_ia.Metricas.IdentificadoresGenericos</strong></div>
+                            <div class="summary-row"><span>Líneas repetidas</span><strong>@_ia.Metricas.RatioLineasRepetidas.ToString("F1")%</strong></div>
+                            <div class="summary-row"><span>Uso de var</span><strong>@_ia.Metricas.RatioVar.ToString("F1")%</strong></div>
+                            <div class="summary-row"><span>Documentación XML</span><strong>@_ia.Metricas.DeclaracionesDoc línea(s)</strong></div>
+                        </div>
+                    }
+                </section>
+            </div>
+
+            <div class="stack">
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3><Icon Nombre="save" Tamano="17" /> Observaciones del docente</h3>
+                            <p>Se guardan junto con la evaluación y quedan en el respaldo del grupo.</p>
+                        </div>
+                    </div>
+                    <textarea class="textarea" rows="6" maxlength="1200" @bind="_observaciones"
+                              placeholder="Anote acuerdos, aclaraciones del estudiante o decisiones pendientes…"></textarea>
+                    <div class="row-between mt-2">
+                        <span class="tiny muted">@_observaciones.Length / 1200</span>
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="GuardarObservacionesAsync" disabled="@_guardandoObservaciones">
+                            @if (_guardandoObservaciones)
+                            {
+                                <span class="spinner small"></span>
+                            }
+                            else
+                            {
+                                <Icon Nombre="save" Tamano="14" />
+                            }
+                            Guardar
+                        </button>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3><Icon Nombre="book" Tamano="17" /> Ficha de defensa</h3>
+                            <p>Preguntas generadas a partir de la estructura real del código.</p>
+                        </div>
+                    </div>
+
+                    @if (_ficha is null)
+                    {
+                        <div class="empty-mini">No se pudo generar la ficha de defensa.</div>
+                    }
+                    else
+                    {
+                        <div class="summary-list">
+                            <div class="summary-row"><span>Preguntas</span><strong>@_ficha.Preguntas.Count</strong></div>
+                            <div class="summary-row"><span>Generada</span><strong>@_ficha.GeneradoEn.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                        </div>
+                        <div class="stack-sm mt-2">
+                            <button type="button" class="btn btn-secondary btn-sm btn-block" @onclick='() => _tab = "quiz"'>
+                                <Icon Nombre="eye" Tamano="14" /> Ver preguntas
+                            </button>
+                            <a class="btn btn-ghost btn-sm btn-block" href="@($"api/evaluaciones/{Id}/quiz?formato=txt")">
+                                <Icon Nombre="download" Tamano="14" /> Descargar .txt
+                            </a>
+                            <a class="btn btn-ghost btn-sm btn-block" href="@($"api/evaluaciones/{Id}/quiz?formato=html")" target="_blank" rel="noopener">
+                                <Icon Nombre="printer" Tamano="14" /> Versión imprimible .html
+                            </a>
+                        </div>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3><Icon Nombre="file" Tamano="17" /> Código analizado</h3>
+                            <p>Vista del texto exacto conservado para auditoría.</p>
+                        </div>
+                    </div>
+                    <VisorCodigo Codigo="@_evaluacion.CodigoFuente" Altura="360px" />
+                </section>
+            </div>
+        </div>
+    }
+    else if (_tab == "diff")
+    {
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <h3><Icon Nombre="code" Tamano="17" /> Diff lado a lado</h3>
+                    <p>Las filas se alinean con Levenshtein; las diferencias se resaltan por color. La izquierda es la entrega analizada.</p>
+                </div>
+                @if (_referencia is not null)
+                {
+                    <a class="btn btn-ghost btn-sm" href="@($"resultados/{_referencia.Id}")">
+                        <Icon Nombre="external" Tamano="14" /> Abrir referencia
+                    </a>
+                }
+            </div>
+
+            @if (_diff is null)
+            {
+                <div class="empty-state compact">
+                    <Icon Nombre="code" Tamano="28" />
+                    <strong>No hay diff disponible</strong>
+                    <span>Esta entrega no tiene un archivo de referencia con código guardado.</span>
+                </div>
+            }
+            else
+            {
+                <DiffViewer Resultado="_diff"
+                            NombreIzquierda="@($"A · {_evaluacion.NombreArchivo}")"
+                            NombreDerecha="@($"B · {_referencia?.NombreArchivo ?? "Referencia"}")" />
+            }
+        </section>
+    }
+    else if (_tab == "metadatos")
+    {
+        <div class="stack">
+            <section class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3><Icon Nombre="file" Tamano="17" /> Metadatos de la entrega A</h3>
+                        <p>Fechas del archivo almacenado, propietario NTFS, codificación y hash SHA-256.</p>
+                    </div>
+                </div>
+                <MetadataCard Metadatos="_metadatos" MostrarRuta="true" />
+            </section>
+
+            @if (_referencia is not null)
+            {
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3><Icon Nombre="file" Tamano="17" /> Metadatos de la referencia B</h3>
+                            <p>@_referencia.NombreArchivo · @NombreReferencia</p>
+                        </div>
+                        <a class="btn btn-ghost btn-sm" href="@($"resultados/{_referencia.Id}")">Abrir</a>
+                    </div>
+                    <MetadataCard Metadatos="_metadatosReferencia" MostrarRuta="true" />
+                </section>
+            }
+
+            <InspectorRutaLocal />
+        </div>
+    }
+    else if (_tab == "quiz")
+    {
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <h3><Icon Nombre="book" Tamano="17" /> Ficha de defensa oral</h3>
+                    <p>@(_ficha?.ResumenAnalisis ?? "Ficha no disponible.")</p>
+                </div>
+                <div class="row">
+                    <a class="btn btn-ghost btn-sm" href="@($"api/evaluaciones/{Id}/quiz?formato=txt")">
+                        <Icon Nombre="download" Tamano="14" /> .txt
+                    </a>
+                    <a class="btn btn-secondary btn-sm" href="@($"api/evaluaciones/{Id}/quiz?formato=html")" target="_blank" rel="noopener">
+                        <Icon Nombre="printer" Tamano="14" /> Imprimible
+                    </a>
+                </div>
+            </div>
+
+            @if (_ficha is null || _ficha.Preguntas.Count == 0)
+            {
+                <div class="empty-state compact">
+                    <Icon Nombre="book" Tamano="28" />
+                    <strong>Sin preguntas de defensa</strong>
+                    <span>No se pudo generar la ficha para esta entrega.</span>
+                </div>
+            }
+            else
+            {
+                @foreach (var pregunta in _ficha.Preguntas)
+                {
+                    <article class="quiz-question">
+                        <div class="quiz-question-head">
+                            <span class="quiz-num">@pregunta.Numero</span>
+                            <div>
+                                <h4><span class="badge chip-accent">@pregunta.Categoria</span></h4>
+                                <p class="mb-0">@pregunta.Pregunta</p>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(pregunta.Evidencia))
+                        {
+                            <div class="evidence">@pregunta.Evidencia</div>
+                        }
+                        <div class="expected"><strong>Respuesta esperada:</strong> @pregunta.RespuestaEsperada</div>
+                        <div class="quiz-score">Puntaje sugerido: @pregunta.PuntajeSugerido · Escala de referencia 0–5</div>
+                    </article>
+                }
+
+                <div class="metadata-note mt-2">
+                    <Icon Nombre="info" Tamano="15" />
+                    <span>Realice la defensa de forma individual, sin entregar las preguntas por anticipado. La probabilidad de IA es una señal, no una prueba concluyente.</span>
+                </div>
+            }
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _cargando = true;
+    private string? _error;
+    private string? _mensaje;
+    private string _tab = "resumen";
+
+    private Evaluacion? _evaluacion;
+    private Evaluacion? _referencia;
+    private ResumenSimilitud? _resumen;
+    private ResultadoDeteccionIA? _ia;
+    private MetadatosArchivo? _metadatos;
+    private MetadatosArchivo? _metadatosReferencia;
+    private ResultadoSimilitud? _diff;
+    private FichaDefensa? _ficha;
+
+    private string _observaciones = string.Empty;
+    private bool _guardandoObservaciones;
+
+    private string NombreEstudiante => _evaluacion is null
+        ? "Sin estudiante"
+        : Prefs.NombreVisible(_evaluacion.EstudianteId, _evaluacion.Estudiante?.Nombre ?? "Sin estudiante");
+
+    private string CarnetEstudiante => _evaluacion is null
+        ? "—"
+        : Prefs.CarnetVisible(_evaluacion.EstudianteId, _evaluacion.Estudiante?.Carnet ?? "—");
+
+    private string NombreReferencia => _referencia is null
+        ? "Sin referencia"
+        : Prefs.NombreVisible(_referencia.EstudianteId, _referencia.Estudiante?.Nombre ?? "Sin estudiante");
+
+    protected override void OnInitialized()
+    {
+        Prefs.Cambio += AlCambiarPreferencias;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _evaluacion = await db.Evaluaciones
+                .AsNoTracking()
+                .Include(e => e.Estudiante)
+                .Include(e => e.Grupo)
+                .Include(e => e.ReferenciaEvaluacion)
+                    .ThenInclude(r => r!.Estudiante)
+                .FirstOrDefaultAsync(e => e.Id == Id);
+
+            if (_evaluacion is null)
+            {
+                _error = "No se encontró la evaluación solicitada.";
+                return;
+            }
+
+            _referencia = _evaluacion.ReferenciaEvaluacion;
+            _observaciones = _evaluacion.Observaciones ?? string.Empty;
+
+            _metadatos = Deserializar<MetadatosArchivo>(_evaluacion.MetadatosJson, "metadatos");
+            _ia = Deserializar<ResultadoDeteccionIA>(_evaluacion.AnalisisIaJson, "análisis de IA");
+            _resumen = Deserializar<ResumenSimilitud>(_evaluacion.AnalisisSimilitudJson, "resumen de similitud");
+
+            if (_resumen is null && _evaluacion.Similitud > 0)
+            {
+                _resumen = new ResumenSimilitud
+                {
+                    Porcentaje = _evaluacion.Similitud,
+                    ReferenciaEvaluacionId = _evaluacion.ReferenciaEvaluacionId,
+                    ReferenciaArchivo = _referencia?.NombreArchivo,
+                    ReferenciaEstudiante = _referencia?.Estudiante?.Nombre
+                };
+            }
+
+            if (_referencia is null && _resumen?.MejoresCoincidencias.FirstOrDefault()?.EvaluacionId is int idCoincidencia && idCoincidencia > 0)
+            {
+                _referencia = await db.Evaluaciones
+                    .AsNoTracking()
+                    .Include(e => e.Estudiante)
+                    .FirstOrDefaultAsync(e => e.Id == idCoincidencia);
+            }
+
+            if (_referencia is not null)
+            {
+                _metadatosReferencia = Deserializar<MetadatosArchivo>(_referencia.MetadatosJson, "metadatos de la referencia");
+
+                if (!string.IsNullOrWhiteSpace(_referencia.CodigoFuente) && !string.IsNullOrWhiteSpace(_evaluacion.CodigoFuente))
+                {
+                    _diff = Similitud.Comparar(_evaluacion.CodigoFuente, _referencia.CodigoFuente, incluirFilas: true);
+                }
+            }
+
+            try
+            {
+                _ficha = Quiz.Generar(
+                    _evaluacion.CodigoFuente,
+                    _evaluacion.NombreArchivo,
+                    _evaluacion.Estudiante?.Nombre,
+                    _evaluacion.Grupo is null
+                        ? null
+                        : $"{_evaluacion.Grupo.Nombre} ({_evaluacion.Grupo.Codigo}) · {_evaluacion.Grupo.Ciclo} {_evaluacion.Grupo.Anio} · C{_evaluacion.Grupo.Computo}",
+                    _evaluacion.Similitud,
+                    _evaluacion.ProbabilidadIA,
+                    _ia,
+                    _referencia?.Estudiante?.Nombre,
+                    _referencia?.NombreArchivo);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "No se pudo generar la ficha de defensa para la evaluación {EvaluacionId}", Id);
+                _ficha = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando el resultado {EvaluacionId}", Id);
+            _error = $"No se pudo cargar el resultado: {ex.Message}";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private T? Deserializar<T>(string? json, string etiqueta) where T : class
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<T>(json, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Logger.LogWarning(ex, "JSON inválido en {Etiqueta} de la evaluación {EvaluacionId}", etiqueta, Id);
+            return null;
+        }
+    }
+
+    private async Task GuardarObservacionesAsync()
+    {
+        if (_evaluacion is null)
+        {
+            return;
+        }
+
+        var texto = (_observaciones ?? string.Empty).Trim();
+        if (texto.Length > 1200)
+        {
+            _mensaje = "Las observaciones no pueden superar 1200 caracteres.";
+            return;
+        }
+
+        _guardandoObservaciones = true;
+        _mensaje = null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var entidad = await db.Evaluaciones.FirstOrDefaultAsync(e => e.Id == Id);
+            if (entidad is null)
+            {
+                _mensaje = "La evaluación ya no existe.";
+                return;
+            }
+
+            entidad.Observaciones = string.IsNullOrWhiteSpace(texto) ? null : texto;
+            await db.SaveChangesAsync();
+            _evaluacion.Observaciones = entidad.Observaciones;
+            _mensaje = "Observaciones guardadas.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error guardando observaciones de la evaluación {EvaluacionId}", Id);
+            _mensaje = $"No se pudieron guardar las observaciones: {ex.Message}";
+        }
+        finally
+        {
+            _guardandoObservaciones = false;
+        }
+    }
+
+    private static string ClaseBadge(string? nivel) => nivel switch
+    {
+        "Crítico" => "badge-critico",
+        "Alto" => "badge-alto",
+        "Medio" => "badge-medio",
+        _ => "badge-bajo"
+    };
+
+    private static string ClaseIa(string? nivel) => nivel switch
+    {
+        "Muy alto" => "badge-muy-alto",
+        "Alto" => "badge-alto",
+        "Medio" => "badge-medio",
+        "Bajo" => "badge-bajo",
+        _ => "badge-muy-bajo"
+    };
+
+    private static string Iniciales(string? nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            return "?";
+        }
+
+        var partes = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return partes.Length >= 2
+            ? $"{char.ToUpperInvariant(partes[0][0])}{char.ToUpperInvariant(partes[1][0])}"
+            : char.ToUpperInvariant(partes[0][0]).ToString();
+    }
+
+    private void AlCambiarPreferencias() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Prefs.Cambio -= AlCambiarPreferencias;
+}

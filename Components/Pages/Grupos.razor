@@ -1,0 +1,1165 @@
+@page "/grupos"
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ImportadorEstudiantes Importador
+@inject GestorRespaldos Respaldos
+@inject AlmacenArchivos Almacen
+@inject PreferenciasUi Prefs
+@inject IJSRuntime JS
+@inject ILogger<Grupos> Logger
+
+<PageTitle>Grupos y estudiantes · Analizador de Plagios</PageTitle>
+
+<div class="page-header">
+    <div>
+        <span class="eyebrow">Organización académica</span>
+        <h1>Grupos y estudiantes</h1>
+        <p class="page-subtitle">Cree la lista de cada periodo, importe estudiantes desde CSV y respalde o restaure un grupo completo con su historial.</p>
+    </div>
+    <div class="page-actions">
+        <button type="button" class="btn btn-ghost" @onclick="MostrarImportarRespaldo">
+            <Icon Nombre="backup" Tamano="16" /> Importar respaldo
+        </button>
+        <button type="button" class="btn btn-primary" @onclick="MostrarFormularioNuevo">
+            <Icon Nombre="plus" Tamano="16" /> Nuevo grupo
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_mensaje))
+{
+    <div class="alert alert-success">
+        <Icon Nombre="check" Tamano="18" />
+        <span>@_mensaje</span>
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-error">
+        <Icon Nombre="alert" Tamano="18" />
+        <div>
+            <strong>Ocurrió un problema.</strong>
+            <div>@_error</div>
+        </div>
+    </div>
+}
+
+@if (_mostrarFormulario)
+{
+    <section class="panel mb-2">
+        <div class="panel-heading">
+            <div>
+                <h3>
+                    <Icon Nombre="@(_editandoId is null ? "plus" : "save")" Tamano="17" />
+                    @(_editandoId is null ? "Crear grupo" : "Editar grupo")
+                </h3>
+                <p>El código, el año, el ciclo y el cómputo identifican un grupo de forma única.</p>
+            </div>
+            <button type="button" class="icon-btn" title="Cerrar" @onclick="CerrarFormulario">
+                <Icon Nombre="x" Tamano="16" />
+            </button>
+        </div>
+
+        <form @onsubmit="GuardarGrupoAsync" @onsubmit:preventDefault>
+            <div class="form-grid">
+                <div class="field">
+                    <label for="grupo-nombre">Nombre del grupo</label>
+                    <input id="grupo-nombre" class="input" @bind="_formNombre" maxlength="120" placeholder="Programación I · Sección A" />
+                </div>
+                <div class="field">
+                    <label for="grupo-codigo">Código</label>
+                    <input id="grupo-codigo" class="input mono" @bind="_formCodigo" maxlength="40" placeholder="PROG1-A" />
+                </div>
+                <div class="field">
+                    <label for="grupo-anio">Año</label>
+                    <input id="grupo-anio" class="input" type="number" min="2000" max="2100" @bind="_formAnio" />
+                </div>
+                <div class="field">
+                    <label for="grupo-ciclo">Ciclo</label>
+                    <input id="grupo-ciclo" class="input" @bind="_formCiclo" maxlength="30" placeholder="Ciclo 2026" />
+                </div>
+                <div class="field">
+                    <label for="grupo-computo">Cómputo</label>
+                    <select id="grupo-computo" class="select" @bind="_formComputo">
+                        <option value="1">Cómputo 1</option>
+                        <option value="2">Cómputo 2</option>
+                        <option value="3">Cómputo 3</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="grupo-descripcion">Descripción (opcional)</label>
+                    <input id="grupo-descripcion" class="input" @bind="_formDescripcion" maxlength="400" placeholder="Horario, docente o modalidad" />
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_formError))
+            {
+                <div class="inline-error mt-2"><Icon Nombre="alert" Tamano="15" /> @_formError</div>
+            }
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-ghost" @onclick="CerrarFormulario">Cancelar</button>
+                <button type="submit" class="btn btn-primary" disabled="@_guardando">
+                    @if (_guardando)
+                    {
+                        <span class="spinner small"></span>
+                    }
+                    else
+                    {
+                        <Icon Nombre="save" Tamano="16" />
+                    }
+                    @(_editandoId is null ? "Crear grupo" : "Guardar cambios")
+                </button>
+            </div>
+        </form>
+    </section>
+}
+
+@if (_mostrarRespaldo)
+{
+    <section class="panel mb-2">
+        <div class="panel-heading">
+            <div>
+                <h3><Icon Nombre="backup" Tamano="17" /> Restaurar un respaldo ZIP</h3>
+                <p>El respaldo contiene un grupo completo con estudiantes, entregas, análisis e historial. Se importa como un grupo nuevo para no sobrescribir datos.</p>
+            </div>
+            <button type="button" class="icon-btn" title="Cerrar" @onclick="() => _mostrarRespaldo = false">
+                <Icon Nombre="x" Tamano="16" />
+            </button>
+        </div>
+
+        <div class="row">
+            <InputFile class="input" accept=".zip" OnChange="ImportarRespaldoAsync" disabled="@_importandoRespaldo" />
+            @if (_importandoRespaldo)
+            {
+                <span class="loading-state"><span class="spinner small"></span> Importando respaldo…</span>
+            }
+        </div>
+
+        @if (_avanceRespaldo is not null)
+        {
+            <div class="alert alert-success mt-2">
+                <Icon Nombre="check" Tamano="17" />
+                <div>
+                    <strong>Respaldo importado: @_avanceRespaldo.GrupoNombre</strong>
+                    <div class="small">
+                        @_avanceRespaldo.EstudiantesImportados estudiante(s), @_avanceRespaldo.EvaluacionesImportadas evaluación(es)
+                        y @_avanceRespaldo.HistorialesImportados registro(s) de historial.
+                    </div>
+                </div>
+            </div>
+
+            @if (_avanceRespaldo.Advertencias.Count > 0)
+            {
+                <div class="alert alert-warning small mt-2">
+                    <Icon Nombre="alert" Tamano="16" />
+                    <div>
+                        @foreach (var advertencia in _avanceRespaldo.Advertencias)
+                        {
+                            <div>@advertencia</div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+
+        <div class="metadata-note mt-2">
+            <Icon Nombre="lock" Tamano="15" />
+            <span>El ZIP se lee en memoria: solo se procesa el manifiesto <code>grupo.json</code>, sin extraer rutas al disco.</span>
+        </div>
+    </section>
+}
+
+<section class="filters panel">
+    <div class="field grow">
+        <label for="filtro-grupo">Buscar</label>
+        <input id="filtro-grupo" class="input" @bind="_filtroTexto" @bind:event="oninput"
+               placeholder="Nombre o código del grupo…" autocomplete="off" />
+    </div>
+    <div class="field">
+        <label for="filtro-computo">Cómputo</label>
+        <select id="filtro-computo" class="select" @bind="_filtroComputo">
+            <option value="0">Todos</option>
+            <option value="1">Cómputo 1</option>
+            <option value="2">Cómputo 2</option>
+            <option value="3">Cómputo 3</option>
+        </select>
+    </div>
+    <div class="field">
+        <label for="filtro-ciclo">Ciclo</label>
+        <select id="filtro-ciclo" class="select" @bind="_filtroCiclo">
+            <option value="">Todos</option>
+            @foreach (var ciclo in _ciclos)
+            {
+                <option value="@ciclo">@ciclo</option>
+            }
+        </select>
+    </div>
+    <div class="field">
+        <label for="filtro-anio">Año</label>
+        <select id="filtro-anio" class="select" @bind="_filtroAnio">
+            <option value="0">Todos</option>
+            @foreach (var anio in _anios)
+            {
+                <option value="@anio">@anio</option>
+            }
+        </select>
+    </div>
+    <div class="filter-actions">
+        <button type="button" class="btn btn-ghost btn-sm" @onclick="LimpiarFiltros">
+            <Icon Nombre="refresh" Tamano="14" /> Limpiar
+        </button>
+    </div>
+</section>
+
+@if (_cargando)
+{
+    <div class="loading-state"><span class="spinner large"></span> Cargando grupos…</div>
+}
+else if (_grupos.Count == 0)
+{
+    <div class="empty-state">
+        <Icon Nombre="users" Tamano="34" />
+        <strong>No hay grupos registrados</strong>
+        <span>Cree el primer grupo para organizar a los estudiantes por ciclo y cómputo.</span>
+        <button type="button" class="btn btn-primary btn-sm mt-2" @onclick="MostrarFormularioNuevo">
+            <Icon Nombre="plus" Tamano="14" /> Crear grupo
+        </button>
+    </div>
+}
+else if (GruposFiltrados.Count() == 0)
+{
+    <div class="empty-state compact">
+        <Icon Nombre="filter" Tamano="28" />
+        <strong>Ningún grupo coincide con el filtro</strong>
+        <span>Ajuste el texto, el cómputo, el ciclo o el año.</span>
+        <button type="button" class="btn btn-ghost btn-sm mt-2" @onclick="LimpiarFiltros">Limpiar filtros</button>
+    </div>
+}
+else
+{
+    <div class="group-list">
+        @foreach (var grupo in GruposFiltrados)
+        {
+            <article class="group-card">
+                <div class="group-head">
+                    <div class="group-main">
+                        <div class="group-avatar">@Iniciales(grupo.Codigo)</div>
+                        <div class="group-title">
+                            <strong>@grupo.Nombre</strong>
+                            <span>@grupo.Codigo · @grupo.Ciclo @grupo.Anio · Cómputo @grupo.Computo</span>
+                            @if (!string.IsNullOrWhiteSpace(grupo.Descripcion))
+                            {
+                                <span class="tiny">@grupo.Descripcion</span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="group-stats">
+                        <span class="chip"><b>@grupo.TotalEstudiantes</b> estudiantes</span>
+                        <span class="chip"><b>@grupo.TotalEvaluaciones</b> entregas</span>
+                        <span class="chip">Sim. <b>@grupo.PromedioSimilitud.ToString("F1")%</b></span>
+                        <span class="chip">IA <b>@grupo.PromedioIA.ToString("F1")%</b></span>
+                    </div>
+
+                    <div class="group-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => AlternarGrupoAsync(grupo.Id)"
+                                title="@(_expandidoId == grupo.Id ? "Ocultar estudiantes" : "Ver estudiantes")">
+                            <Icon Nombre="@(_expandidoId == grupo.Id ? "chevron-down" : "chevron-right")" Tamano="14" />
+                            <span>@(_expandidoId == grupo.Id ? "Ocultar" : "Estudiantes")</span>
+                        </button>
+                        <a class="btn btn-ghost btn-sm" href="@($"analisis?grupoId={grupo.Id}")" title="Analizar una entrega de este grupo">
+                            <Icon Nombre="scan" Tamano="14" /> <span>Analizar</span>
+                        </a>
+                        <a class="btn btn-ghost btn-sm" href="@($"api/respaldos/grupo/{grupo.Id}")" title="Descargar respaldo ZIP">
+                            <Icon Nombre="download" Tamano="14" /> <span>Respaldo</span>
+                        </a>
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => EditarGrupoAsync(grupo.Id)" title="Editar grupo">
+                            <Icon Nombre="save" Tamano="14" /> <span>Editar</span>
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" @onclick="() => EliminarGrupoAsync(grupo)" title="Eliminar grupo">
+                            <Icon Nombre="trash" Tamano="14" /> <span>Eliminar</span>
+                        </button>
+                    </div>
+                </div>
+
+                @if (_expandidoId == grupo.Id)
+                {
+                    <div class="group-body">
+                        @if (_cargandoEstudiantes)
+                        {
+                            <div class="loading-state"><span class="spinner"></span> Cargando estudiantes…</div>
+                        }
+                        else
+                        {
+                            <div class="row-between">
+                                <div>
+                                    <strong>Lista de estudiantes</strong>
+                                    <p class="small muted mb-0">Los carnets son únicos dentro de cada grupo. El modo a ciegas también oculta esta lista.</p>
+                                </div>
+                                <div class="row">
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="() => MostrarAgregarEstudiante(grupo.Id)">
+                                        <Icon Nombre="plus" Tamano="14" /> Estudiante
+                                    </button>
+                                    <button type="button" class="btn btn-ghost btn-sm" @onclick="() => MostrarImportacionCsv(grupo.Id)">
+                                        <Icon Nombre="upload" Tamano="14" /> Importar CSV
+                                    </button>
+                                    <a class="btn btn-ghost btn-sm" href="api/plantillas/estudiantes.csv">
+                                        <Icon Nombre="download" Tamano="14" /> Plantilla
+                                    </a>
+                                </div>
+                            </div>
+
+                            @if (_agregandoEstudiante && _grupoEstudianteId == grupo.Id)
+                            {
+                                <form class="inline-form mt-2" @onsubmit="AgregarEstudianteAsync" @onsubmit:preventDefault>
+                                    <div class="field grow">
+                                        <label for="est-carnet">Carnet</label>
+                                        <input id="est-carnet" class="input mono" @bind="_nuevoCarnet" maxlength="40" placeholder="20240001" />
+                                    </div>
+                                    <div class="field grow">
+                                        <label for="est-nombre">Nombre completo</label>
+                                        <input id="est-nombre" class="input" @bind="_nuevoNombre" maxlength="160" placeholder="Ana Pérez" />
+                                    </div>
+                                    <div class="field grow">
+                                        <label for="est-correo">Correo (opcional)</label>
+                                        <input id="est-correo" class="input" type="email" @bind="_nuevoCorreo" maxlength="180" placeholder="ana@ejemplo.com" />
+                                    </div>
+                                    <button type="submit" class="btn btn-primary" disabled="@_guardandoEstudiante">
+                                        <Icon Nombre="save" Tamano="15" /> Agregar
+                                    </button>
+                                </form>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(_errorEstudiante))
+                            {
+                                <div class="inline-error mt-2"><Icon Nombre="alert" Tamano="15" /> @_errorEstudiante</div>
+                            }
+
+                            @if (_importandoCsv && _grupoCsvId == grupo.Id)
+                            {
+                                <div class="panel inset-panel mt-3">
+                                    <div class="panel-heading">
+                                        <div>
+                                            <h3><Icon Nombre="upload" Tamano="16" /> Importación masiva</h3>
+                                            <p>Acepta encabezados <code>carnet,nombre,correo</code> y separadores coma, punto y coma o tabulador.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="row mb-2">
+                                        <InputFile class="input" accept=".csv,.txt" OnChange="LeerCsvAsync" />
+                                        <button type="button" class="btn btn-ghost btn-sm" @onclick="PrevisualizarCsvAsync">
+                                            <Icon Nombre="eye" Tamano="14" /> Previsualizar
+                                        </button>
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="csv-texto">O pegue el contenido CSV aquí</label>
+                                        <textarea id="csv-texto" class="textarea mono" rows="5" @bind="_csvTexto"
+                                                  placeholder="carnet,nombre,correo&#10;20240001,Ana Pérez,ana@ejemplo.com"></textarea>
+                                    </div>
+
+                                    @if (_csvPrevisualizacion.Count > 0)
+                                    {
+                                        <div class="table-wrapper mt-2">
+                                            <table class="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Línea</th>
+                                                        <th>Carnet</th>
+                                                        <th>Nombre</th>
+                                                        <th>Correo</th>
+                                                        <th>Estado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var fila in _csvPrevisualizacion.Take(30))
+                                                    {
+                                                        <tr class="@(fila.Valida ? null : "text-danger")">
+                                                            <td class="mono tiny">@fila.Linea</td>
+                                                            <td class="mono">@fila.Carnet</td>
+                                                            <td>@fila.Nombre</td>
+                                                            <td class="tiny muted">@fila.Correo</td>
+                                                            <td>
+                                                                @if (fila.Valida)
+                                                                {
+                                                                    <span class="badge badge-bajo">Válida</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge badge-critico" title="@fila.Error">Inválida</span>
+                                                                    <div class="tiny muted mt-1">@fila.Error</div>
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        @if (_csvPrevisualizacion.Count > 30)
+                                        {
+                                            <p class="help-text">Vista previa limitada a 30 filas de @_csvPrevisualizacion.Count.</p>
+                                        }
+                                    }
+
+                                    @if (_csvResultado is not null)
+                                    {
+                                        <div class="alert @(_csvResultado.Importados > 0 ? "alert-success" : "alert-warning") small mt-2">
+                                            <Icon Nombre="info" Tamano="16" />
+                                            <div>
+                                                <strong>@_csvResultado.Importados importado(s), @_csvResultado.Omitidos omitido(s).</strong>
+                                                @foreach (var mensaje in _csvResultado.Mensajes.Take(12))
+                                                {
+                                                    <div>@mensaje</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <div class="form-actions">
+                                        <button type="button" class="btn btn-ghost" @onclick="CerrarImportacionCsv">Cerrar</button>
+                                        <button type="button" class="btn btn-primary" @onclick="ImportarCsvAsync" disabled="@_importandoCsvGuardando">
+                                            @if (_importandoCsvGuardando)
+                                            {
+                                                <span class="spinner small"></span>
+                                            }
+                                            else
+                                            {
+                                                <Icon Nombre="upload" Tamano="15" />
+                                            }
+                                            Importar estudiantes
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (EstudiantesDe(grupo.Id).Count == 0)
+                            {
+                                <div class="group-empty">
+                                    Este grupo aún no tiene estudiantes. Agregue uno o importe un CSV para comenzar.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="table-wrapper mt-2">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Estudiante</th>
+                                                <th>Carnet</th>
+                                                <th>Correo</th>
+                                                <th>Entregas</th>
+                                                <th>Promedio</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var estudiante in EstudiantesDe(grupo.Id))
+                                            {
+                                                <tr>
+                                                    <td class="primary-cell">@Prefs.NombreVisible(estudiante.Id, estudiante.Nombre)</td>
+                                                    <td class="mono tiny">@Prefs.CarnetVisible(estudiante.Id, estudiante.Carnet)</td>
+                                                    <td class="tiny muted">@(estudiante.Correo ?? "—")</td>
+                                                    <td><span class="chip">@estudiante.Evaluaciones</span></td>
+                                                    <td class="tiny muted">
+                                                        Sim. @estudiante.PromedioSimilitud.ToString("F1")% · IA @estudiante.PromedioIA.ToString("F1")%
+                                                    </td>
+                                                    <td class="actions-cell">
+                                                        <button type="button" class="icon-btn danger" title="Eliminar estudiante"
+                                                                @onclick="() => EliminarEstudianteAsync(estudiante)">
+                                                            <Icon Nombre="trash" Tamano="15" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </article>
+        }
+    </div>
+
+    <p class="help-text">
+        Se muestran @GruposFiltrados.Count() de @_grupos.Count grupo(s). Cada grupo conserva sus propios estudiantes,
+        entregas e historial, lo que permite comparar la evolución por cómputo sin mezclar periodos.
+    </p>
+}
+
+@code {
+    private bool _cargando = true;
+    private bool _guardando;
+    private bool _guardandoEstudiante;
+    private bool _cargandoEstudiantes;
+    private bool _importandoCsv;
+    private bool _importandoCsvGuardando;
+    private bool _importandoRespaldo;
+    private string? _error;
+    private string? _mensaje;
+    private string? _formError;
+    private string? _errorEstudiante;
+
+    private List<GrupoResumen> _grupos = new();
+    private List<string> _ciclos = new();
+    private List<int> _anios = new();
+    private readonly Dictionary<int, List<EstudianteVista>> _estudiantes = new();
+
+    private string _filtroTexto = string.Empty;
+    private int _filtroComputo;
+    private string _filtroCiclo = string.Empty;
+    private int _filtroAnio;
+
+    private bool _mostrarFormulario;
+    private int? _editandoId;
+    private string _formNombre = string.Empty;
+    private string _formCodigo = string.Empty;
+    private int _formAnio = DateTime.Today.Year;
+    private string _formCiclo = $"Ciclo {DateTime.Today.Year}";
+    private int _formComputo = 1;
+    private string? _formDescripcion;
+
+    private int? _expandidoId;
+    private int _grupoEstudianteId;
+    private bool _agregandoEstudiante;
+    private string _nuevoCarnet = string.Empty;
+    private string _nuevoNombre = string.Empty;
+    private string? _nuevoCorreo;
+
+    private int _grupoCsvId;
+    private string _csvTexto = string.Empty;
+    private List<FilaEstudianteImportacion> _csvPrevisualizacion = new();
+    private ResultadoImportacionEstudiantes? _csvResultado;
+
+    private bool _mostrarRespaldo;
+    private AvanceImportacion? _avanceRespaldo;
+
+    private IEnumerable<GrupoResumen> GruposFiltrados => _grupos.Where(g =>
+        (_filtroComputo == 0 || g.Computo == _filtroComputo) &&
+        (string.IsNullOrWhiteSpace(_filtroCiclo) || string.Equals(g.Ciclo, _filtroCiclo, StringComparison.OrdinalIgnoreCase)) &&
+        (_filtroAnio == 0 || g.Anio == _filtroAnio) &&
+        (string.IsNullOrWhiteSpace(_filtroTexto) ||
+         g.Nombre.Contains(_filtroTexto, StringComparison.OrdinalIgnoreCase) ||
+         g.Codigo.Contains(_filtroTexto, StringComparison.OrdinalIgnoreCase)));
+
+    protected override void OnInitialized()
+    {
+        Prefs.Cambio += AlCambiarPreferencias;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarGruposAsync();
+    }
+
+    private async Task CargarGruposAsync(int? expandir = null)
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _grupos = await db.Grupos
+                .AsNoTracking()
+                .OrderByDescending(g => g.Anio)
+                .ThenBy(g => g.Ciclo)
+                .ThenBy(g => g.Computo)
+                .ThenBy(g => g.Nombre)
+                .Select(g => new GrupoResumen
+                {
+                    Id = g.Id,
+                    Nombre = g.Nombre,
+                    Codigo = g.Codigo,
+                    Anio = g.Anio,
+                    Ciclo = g.Ciclo,
+                    Computo = g.Computo,
+                    Descripcion = g.Descripcion,
+                    CreadoEn = g.CreadoEn,
+                    TotalEstudiantes = g.Estudiantes.Count,
+                    TotalEvaluaciones = g.Evaluaciones.Count,
+                    PromedioSimilitud = g.Evaluaciones.Select(e => (double?)e.Similitud).Average() ?? 0,
+                    PromedioIA = g.Evaluaciones.Select(e => (double?)e.ProbabilidadIA).Average() ?? 0
+                })
+                .ToListAsync();
+
+            _ciclos = _grupos.Select(g => g.Ciclo).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(c => c).ToList();
+            _anios = _grupos.Select(g => g.Anio).Distinct().OrderByDescending(a => a).ToList();
+
+            if (expandir is int grupoId)
+            {
+                _expandidoId = grupoId;
+                await CargarEstudiantesAsync(grupoId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando grupos");
+            _error = $"No se pudieron cargar los grupos: {ex.Message}";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task CargarEstudiantesAsync(int grupoId)
+    {
+        _cargandoEstudiantes = true;
+        _errorEstudiante = null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _estudiantes[grupoId] = await db.Estudiantes
+                .AsNoTracking()
+                .Where(e => e.GrupoId == grupoId)
+                .OrderBy(e => e.Nombre)
+                .Select(e => new EstudianteVista
+                {
+                    Id = e.Id,
+                    Nombre = e.Nombre,
+                    Carnet = e.Carnet,
+                    Correo = e.Correo,
+                    Evaluaciones = e.Evaluaciones.Count(),
+                    PromedioSimilitud = e.Evaluaciones.Select(x => (double?)x.Similitud).Average() ?? 0,
+                    PromedioIA = e.Evaluaciones.Select(x => (double?)x.ProbabilidadIA).Average() ?? 0
+                })
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando estudiantes del grupo {GrupoId}", grupoId);
+            _errorEstudiante = $"No se pudieron cargar los estudiantes: {ex.Message}";
+        }
+        finally
+        {
+            _cargandoEstudiantes = false;
+        }
+    }
+
+    private async Task AlternarGrupoAsync(int grupoId)
+    {
+        if (_expandidoId == grupoId)
+        {
+            _expandidoId = null;
+            return;
+        }
+
+        _expandidoId = grupoId;
+        _agregandoEstudiante = false;
+        _importandoCsv = false;
+        await CargarEstudiantesAsync(grupoId);
+    }
+
+    private void MostrarFormularioNuevo()
+    {
+        _mostrarFormulario = true;
+        _editandoId = null;
+        _formError = null;
+        _formNombre = string.Empty;
+        _formCodigo = string.Empty;
+        _formAnio = DateTime.Today.Year;
+        _formCiclo = $"Ciclo {DateTime.Today.Year}";
+        _formComputo = 1;
+        _formDescripcion = null;
+    }
+
+    private async Task EditarGrupoAsync(int grupoId)
+    {
+        var grupo = _grupos.FirstOrDefault(g => g.Id == grupoId);
+        if (grupo is null)
+        {
+            return;
+        }
+
+        _mostrarFormulario = true;
+        _editandoId = grupo.Id;
+        _formError = null;
+        _formNombre = grupo.Nombre;
+        _formCodigo = grupo.Codigo;
+        _formAnio = grupo.Anio;
+        _formCiclo = grupo.Ciclo;
+        _formComputo = grupo.Computo;
+        _formDescripcion = grupo.Descripcion;
+        await Task.CompletedTask;
+    }
+
+    private void CerrarFormulario()
+    {
+        _mostrarFormulario = false;
+        _editandoId = null;
+        _formError = null;
+    }
+
+    private async Task GuardarGrupoAsync()
+    {
+        _formError = null;
+        var nombre = (_formNombre ?? string.Empty).Trim();
+        var codigo = (_formCodigo ?? string.Empty).Trim();
+        var ciclo = (_formCiclo ?? string.Empty).Trim();
+
+        if (nombre.Length is < 2 or > 120)
+        {
+            _formError = "El nombre debe tener entre 2 y 120 caracteres.";
+            return;
+        }
+
+        if (codigo.Length is < 2 or > 40)
+        {
+            _formError = "El código debe tener entre 2 y 40 caracteres.";
+            return;
+        }
+
+        if (ciclo.Length is < 1 or > 30)
+        {
+            _formError = "El ciclo es obligatorio y no puede superar 30 caracteres.";
+            return;
+        }
+
+        if (_formAnio is < 2000 or > 2100)
+        {
+            _formError = "El año debe estar entre 2000 y 2100.";
+            return;
+        }
+
+        if (_formComputo is < 1 or > 3)
+        {
+            _formError = "El cómputo debe ser 1, 2 o 3.";
+            return;
+        }
+
+        _guardando = true;
+        _error = null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var duplicado = await db.Grupos.AnyAsync(g =>
+                g.Codigo == codigo && g.Anio == _formAnio && g.Ciclo == ciclo && g.Computo == _formComputo &&
+                (_editandoId == null || g.Id != _editandoId.Value));
+
+            if (duplicado)
+            {
+                _formError = "Ya existe un grupo con ese código en el mismo año, ciclo y cómputo.";
+                return;
+            }
+
+            if (_editandoId is int id)
+            {
+                var grupo = await db.Grupos.FirstOrDefaultAsync(g => g.Id == id);
+                if (grupo is null)
+                {
+                    _formError = "El grupo ya no existe.";
+                    await CargarGruposAsync();
+                    return;
+                }
+
+                grupo.Nombre = nombre;
+                grupo.Codigo = codigo;
+                grupo.Anio = _formAnio;
+                grupo.Ciclo = ciclo;
+                grupo.Computo = _formComputo;
+                grupo.Descripcion = string.IsNullOrWhiteSpace(_formDescripcion) ? null : _formDescripcion.Trim();
+                await db.SaveChangesAsync();
+                _mensaje = $"Grupo «{nombre}» actualizado.";
+                _mostrarFormulario = false;
+                await CargarGruposAsync(id);
+            }
+            else
+            {
+                var grupo = new Grupo
+                {
+                    Nombre = nombre,
+                    Codigo = codigo,
+                    Anio = _formAnio,
+                    Ciclo = ciclo,
+                    Computo = _formComputo,
+                    Descripcion = string.IsNullOrWhiteSpace(_formDescripcion) ? null : _formDescripcion.Trim(),
+                    CreadoEn = DateTime.UtcNow
+                };
+
+                db.Grupos.Add(grupo);
+                await db.SaveChangesAsync();
+                _mensaje = $"Grupo «{nombre}» creado. Agregue estudiantes para comenzar a analizar.";
+                _mostrarFormulario = false;
+                await CargarGruposAsync(grupo.Id);
+            }
+        }
+        catch (DbUpdateException ex)
+        {
+            Logger.LogError(ex, "Error guardando grupo");
+            _formError = "No se pudo guardar el grupo. Verifique que el código no esté repetido.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error inesperado guardando grupo");
+            _formError = $"Error inesperado: {ex.Message}";
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private async Task EliminarGrupoAsync(GrupoResumen grupo)
+    {
+        var confirmado = await ConfirmarAsync(
+            $"¿Eliminar el grupo «{grupo.Nombre}»?\n\nSe borrarán {grupo.TotalEstudiantes} estudiante(s), {grupo.TotalEvaluaciones} entrega(s) y su historial. Esta acción no se puede deshacer.");
+        if (!confirmado)
+        {
+            return;
+        }
+
+        _error = null;
+        _mensaje = null;
+        try
+        {
+            List<string> archivos;
+            await using (var db = await DbFactory.CreateDbContextAsync())
+            {
+                archivos = await db.Evaluaciones
+                    .Where(e => e.GrupoId == grupo.Id)
+                    .Select(e => e.NombreAlmacenado)
+                    .ToListAsync();
+
+                var entidad = await db.Grupos.FirstOrDefaultAsync(g => g.Id == grupo.Id);
+                if (entidad is null)
+                {
+                    return;
+                }
+
+                db.Grupos.Remove(entidad);
+                await db.SaveChangesAsync();
+            }
+
+            foreach (var archivo in archivos)
+            {
+                await Almacen.EliminarAsync(archivo);
+            }
+
+            if (_expandidoId == grupo.Id)
+            {
+                _expandidoId = null;
+            }
+
+            _estudiantes.Remove(grupo.Id);
+            _mensaje = $"Grupo «{grupo.Nombre}» eliminado.";
+            await CargarGruposAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error eliminando grupo {GrupoId}", grupo.Id);
+            _error = $"No se pudo eliminar el grupo: {ex.Message}";
+        }
+    }
+
+    private void MostrarAgregarEstudiante(int grupoId)
+    {
+        _grupoEstudianteId = grupoId;
+        _agregandoEstudiante = true;
+        _errorEstudiante = null;
+        _nuevoCarnet = string.Empty;
+        _nuevoNombre = string.Empty;
+        _nuevoCorreo = null;
+    }
+
+    private async Task AgregarEstudianteAsync()
+    {
+        _errorEstudiante = null;
+        var carnet = (_nuevoCarnet ?? string.Empty).Trim();
+        var nombre = (_nuevoNombre ?? string.Empty).Trim();
+        var correo = string.IsNullOrWhiteSpace(_nuevoCorreo) ? null : _nuevoCorreo.Trim();
+
+        if (carnet.Length is < 2 or > 40)
+        {
+            _errorEstudiante = "El carnet debe tener entre 2 y 40 caracteres.";
+            return;
+        }
+
+        if (nombre.Length is < 2 or > 160)
+        {
+            _errorEstudiante = "El nombre debe tener entre 2 y 160 caracteres.";
+            return;
+        }
+
+        _guardandoEstudiante = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var duplicado = await db.Estudiantes.AnyAsync(e => e.GrupoId == _grupoEstudianteId && e.Carnet == carnet);
+            if (duplicado)
+            {
+                _errorEstudiante = $"El carnet {carnet} ya está registrado en este grupo.";
+                return;
+            }
+
+            db.Estudiantes.Add(new Estudiante
+            {
+                GrupoId = _grupoEstudianteId,
+                Carnet = carnet,
+                Nombre = nombre,
+                Correo = correo,
+                CreadoEn = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+            _nuevoCarnet = string.Empty;
+            _nuevoNombre = string.Empty;
+            _nuevoCorreo = null;
+            _mensaje = $"Estudiante {nombre} agregado.";
+            await CargarEstudiantesAsync(_grupoEstudianteId);
+            await ActualizarContadoresAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            Logger.LogError(ex, "Error agregando estudiante al grupo {GrupoId}", _grupoEstudianteId);
+            _errorEstudiante = "No se pudo agregar el estudiante. Verifique el carnet.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error inesperado agregando estudiante");
+            _errorEstudiante = $"Error inesperado: {ex.Message}";
+        }
+        finally
+        {
+            _guardandoEstudiante = false;
+        }
+    }
+
+    private async Task EliminarEstudianteAsync(EstudianteVista estudiante)
+    {
+        var confirmado = await ConfirmarAsync(
+            $"¿Eliminar a {Prefs.NombreVisible(estudiante.Id, estudiante.Nombre)}?\n\nTambién se borrarán sus {estudiante.Evaluaciones} entrega(s) y su historial.");
+        if (!confirmado)
+        {
+            return;
+        }
+
+        _errorEstudiante = null;
+        try
+        {
+            List<string> archivos;
+            await using (var db = await DbFactory.CreateDbContextAsync())
+            {
+                archivos = await db.Evaluaciones
+                    .Where(e => e.EstudianteId == estudiante.Id)
+                    .Select(e => e.NombreAlmacenado)
+                    .ToListAsync();
+
+                var entidad = await db.Estudiantes.FirstOrDefaultAsync(e => e.Id == estudiante.Id);
+                if (entidad is null)
+                {
+                    return;
+                }
+
+                db.Estudiantes.Remove(entidad);
+                await db.SaveChangesAsync();
+            }
+
+            foreach (var archivo in archivos)
+            {
+                await Almacen.EliminarAsync(archivo);
+            }
+
+            _mensaje = $"Estudiante {estudiante.Nombre} eliminado.";
+            await CargarEstudiantesAsync(_expandidoId ?? _grupoEstudianteId);
+            await ActualizarContadoresAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error eliminando estudiante {EstudianteId}", estudiante.Id);
+            _errorEstudiante = $"No se pudo eliminar el estudiante: {ex.Message}";
+        }
+    }
+
+    private async Task ActualizarContadoresAsync()
+    {
+        var expandido = _expandidoId;
+        await CargarGruposAsync(expandido);
+    }
+
+    private void MostrarImportacionCsv(int grupoId)
+    {
+        _grupoCsvId = grupoId;
+        _importandoCsv = true;
+        _csvTexto = string.Empty;
+        _csvPrevisualizacion = new();
+        _csvResultado = null;
+    }
+
+    private void CerrarImportacionCsv()
+    {
+        _importandoCsv = false;
+        _csvTexto = string.Empty;
+        _csvPrevisualizacion = new();
+        _csvResultado = null;
+    }
+
+    private async Task LeerCsvAsync(InputFileChangeEventArgs e)
+    {
+        _errorEstudiante = null;
+        _csvResultado = null;
+        try
+        {
+            var archivo = e.File;
+            if (archivo.Size > 4 * 1024 * 1024)
+            {
+                _errorEstudiante = "El CSV supera el límite de 4 MB.";
+                return;
+            }
+
+            await using var stream = archivo.OpenReadStream(4 * 1024 * 1024);
+            using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true);
+            _csvTexto = await reader.ReadToEndAsync();
+            await PrevisualizarCsvAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error leyendo CSV de estudiantes");
+            _errorEstudiante = $"No se pudo leer el CSV: {ex.Message}";
+        }
+    }
+
+    private async Task PrevisualizarCsvAsync()
+    {
+        _csvResultado = null;
+        _errorEstudiante = null;
+        try
+        {
+            _csvPrevisualizacion = (await Importador.PrevisualizarAsync(_grupoCsvId, _csvTexto)).ToList();
+            if (_csvPrevisualizacion.Count == 0)
+            {
+                _errorEstudiante = "No se detectaron filas en el contenido CSV.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error previsualizando CSV");
+            _errorEstudiante = $"No se pudo interpretar el CSV: {ex.Message}";
+        }
+    }
+
+    private async Task ImportarCsvAsync()
+    {
+        _errorEstudiante = null;
+        if (string.IsNullOrWhiteSpace(_csvTexto))
+        {
+            _errorEstudiante = "Cargue un archivo o pegue el contenido CSV.";
+            return;
+        }
+
+        _importandoCsvGuardando = true;
+        try
+        {
+            _csvResultado = await Importador.ImportarAsync(_grupoCsvId, _csvTexto);
+            _csvPrevisualizacion = Importador.Previsualizar(_csvTexto).ToList();
+            await CargarEstudiantesAsync(_grupoCsvId);
+            await ActualizarContadoresAsync();
+            if (_csvResultado.Importados > 0)
+            {
+                _mensaje = $"Se importaron {_csvResultado.Importados} estudiante(s).";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error importando CSV al grupo {GrupoId}", _grupoCsvId);
+            _errorEstudiante = $"No se pudo importar el CSV: {ex.Message}";
+        }
+        finally
+        {
+            _importandoCsvGuardando = false;
+        }
+    }
+
+    private void MostrarImportarRespaldo()
+    {
+        _mostrarRespaldo = true;
+        _avanceRespaldo = null;
+        _error = null;
+    }
+
+    private async Task ImportarRespaldoAsync(InputFileChangeEventArgs e)
+    {
+        _importandoRespaldo = true;
+        _avanceRespaldo = null;
+        _error = null;
+        try
+        {
+            var archivo = e.File;
+            if (!Path.GetExtension(archivo.Name).Equals(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                _error = "Seleccione un archivo ZIP generado por la aplicación.";
+                return;
+            }
+
+            if (archivo.Size > 64L * 1024 * 1024)
+            {
+                _error = "El respaldo supera el límite de 64 MB.";
+                return;
+            }
+
+            await using var stream = archivo.OpenReadStream(64L * 1024 * 1024);
+            _avanceRespaldo = await Respaldos.ImportarAsync(stream);
+            _mensaje = $"Respaldo del grupo «{_avanceRespaldo.GrupoNombre}» importado.";
+            await CargarGruposAsync(_avanceRespaldo.GrupoId);
+        }
+        catch (InvalidDataException ex)
+        {
+            _error = $"El respaldo no es válido: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error importando respaldo");
+            _error = $"No se pudo importar el respaldo: {ex.Message}";
+        }
+        finally
+        {
+            _importandoRespaldo = false;
+        }
+    }
+
+    private void LimpiarFiltros()
+    {
+        _filtroTexto = string.Empty;
+        _filtroComputo = 0;
+        _filtroCiclo = string.Empty;
+        _filtroAnio = 0;
+    }
+
+    private IReadOnlyList<EstudianteVista> EstudiantesDe(int grupoId)
+        => _estudiantes.TryGetValue(grupoId, out var lista) ? lista : Array.Empty<EstudianteVista>();
+
+    private async Task<bool> ConfirmarAsync(string mensaje)
+    {
+        try
+        {
+            return await JS.InvokeAsync<bool>("plagio.confirmar", mensaje);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "No se pudo mostrar el diálogo de confirmación");
+            return false;
+        }
+    }
+
+    private static string Iniciales(string codigo)
+    {
+        var limpio = new string(codigo.Where(char.IsLetterOrDigit).ToArray());
+        return limpio.Length >= 2 ? limpio[..2].ToUpperInvariant() : "GR";
+    }
+
+    private void AlCambiarPreferencias() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Prefs.Cambio -= AlCambiarPreferencias;
+
+    private sealed class EstudianteVista
+    {
+        public int Id { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string Carnet { get; set; } = string.Empty;
+        public string? Correo { get; set; }
+        public int Evaluaciones { get; set; }
+        public double PromedioSimilitud { get; set; }
+        public double PromedioIA { get; set; }
+    }
+}

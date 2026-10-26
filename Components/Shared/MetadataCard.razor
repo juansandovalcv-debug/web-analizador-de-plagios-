@@ -1,0 +1,114 @@
+@using System.Globalization
+
+@if (Metadatos is null)
+{
+    <div class="empty-state compact">
+        <Icon Nombre="info" Tamano="26" />
+        <strong>Sin metadatos</strong>
+        <span>No se registraron metadatos para este archivo.</span>
+    </div>
+}
+else
+{
+    <div class="metadata-grid">
+        <div class="metadata-item">
+            <span class="metadata-label">Nombre original</span>
+            <strong class="mono">@Metadatos.NombreOriginal</strong>
+        </div>
+        <div class="metadata-item">
+            <span class="metadata-label">Nombre almacenado</span>
+            <strong class="mono">@Metadatos.NombreAlmacenado</strong>
+        </div>
+        <div class="metadata-item">
+            <span class="metadata-label">Tamaño</span>
+            <strong>@FormatearTamano(Metadatos.TamanoBytes)</strong>
+        </div>
+        <div class="metadata-item">
+            <span class="metadata-label">Codificación</span>
+            <strong>@Metadatos.Codificacion @(Metadatos.TieneBom ? "· BOM" : "")</strong>
+        </div>
+        <div class="metadata-item">
+            <span class="metadata-label">Creado (Windows)</span>
+            <strong>@FormatearFecha(Metadatos.CreadoWindows)</strong>
+        </div>
+        <div class="metadata-item">
+            <span class="metadata-label">Modificado (Windows)</span>
+            <strong>@FormatearFecha(Metadatos.ModificadoWindows)</strong>
+        </div>
+        <div class="metadata-item">
+            <span class="metadata-label">Último acceso</span>
+            <strong>@FormatearFecha(Metadatos.AccedidoWindows)</strong>
+        </div>
+        <div class="metadata-item">
+            <span class="metadata-label">Modificado en navegador</span>
+            <strong>@FormatearFecha(Metadatos.ModificadoNavegador?.LocalDateTime)</strong>
+        </div>
+        <div class="metadata-item">
+            <span class="metadata-label">Propietario NTFS</span>
+            <strong>@(Metadatos.Propietario ?? "No disponible")</strong>
+        </div>
+        <div class="metadata-item">
+            <span class="metadata-label">Origen del dato</span>
+            <strong>@Metadatos.Origen</strong>
+        </div>
+        @if (Metadatos.ConfianzaOcr is double confianza)
+        {
+            <div class="metadata-item">
+                <span class="metadata-label">Confianza OCR</span>
+                <strong>@confianza.ToString("F1", CultureInfo.InvariantCulture)%</strong>
+            </div>
+        }
+        @if (MostrarRuta && !string.IsNullOrWhiteSpace(Metadatos.RutaRelativaSegura))
+        {
+            <div class="metadata-item metadata-wide">
+                <span class="metadata-label">Ruta / referencia segura</span>
+                <strong class="mono wrap">@Metadatos.RutaRelativaSegura</strong>
+            </div>
+        }
+        <div class="metadata-item metadata-wide">
+            <span class="metadata-label">SHA-256</span>
+            <strong class="mono wrap">@Metadatos.HashSha256</strong>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Metadatos.Notas))
+    {
+        <div class="metadata-note"><Icon Nombre="info" Tamano="15" /> @Metadatos.Notas</div>
+    }
+
+    @if (Metadatos.Advertencias.Count > 0)
+    {
+        <div class="alert alert-warning small">
+            <Icon Nombre="alert" Tamano="16" />
+            <div>
+                @foreach (var advertencia in Metadatos.Advertencias)
+                {
+                    <div>@advertencia</div>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public MetadatosArchivo? Metadatos { get; set; }
+    [Parameter] public bool MostrarRuta { get; set; }
+
+    private static string FormatearFecha(DateTime? fecha)
+        => fecha?.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture) ?? "No disponible";
+
+    private static string FormatearTamano(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024d:0.#} KB";
+        }
+
+        return $"{bytes / (1024d * 1024d):0.##} MB";
+    }
+}

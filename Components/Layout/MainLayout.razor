@@ -1,0 +1,152 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject IJSRuntime JS
+@inject PreferenciasUi Prefs
+@inject NavigationManager Nav
+
+<div class="app-shell">
+    <aside class="sidebar">
+        <NavMenu />
+    </aside>
+    <div class="sidebar-backdrop" @onclick="CerrarMenu"></div>
+
+    <div class="app-main">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button type="button" class="icon-btn mobile-only" @onclick="AlternarMenu" aria-label="Abrir menú" title="Menú">
+                    <Icon Nombre="menu" Tamano="20" />
+                </button>
+                <div class="topbar-context">
+                    <span class="eyebrow">Entorno local-first</span>
+                    <strong>Auditoría de entregas C#</strong>
+                </div>
+            </div>
+
+            <div class="topbar-actions">
+                <button type="button"
+                        class="blind-toggle @(Prefs.ModoCiego ? "active" : null)"
+                        @onclick="AlternarModoCiego"
+                        title="@(Prefs.ModoCiego ? "Mostrar identidades" : "Ocultar nombre y carnet para evaluar sin sesgos")">
+                    <Icon Nombre="@(Prefs.ModoCiego ? "eye-off" : "eye")" Tamano="17" />
+                    <span class="blind-label">Modo a ciegas</span>
+                    <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+                </button>
+
+                <button type="button" class="icon-btn" @onclick="AlternarTema"
+                        title="@(Prefs.TemaOscuro ? "Cambiar a tema claro" : "Cambiar a tema oscuro")"
+                        aria-label="Cambiar tema">
+                    <Icon Nombre="@(Prefs.TemaOscuro ? "sun" : "moon")" Tamano="19" />
+                </button>
+            </div>
+        </header>
+
+        <main class="page-content">
+            @Body
+        </main>
+
+        <footer class="app-footer">
+            <span><span class="status-dot"></span> Datos almacenados localmente en SQLite</span>
+            <span class="dot-separator">·</span>
+            <span>Ninguna entrega se envía a servicios externos</span>
+        </footer>
+    </div>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Ocurrió un error no controlado en la interfaz.
+    <a href="." class="reload">Recargar</a>
+    <span class="dismiss" title="Cerrar">✕</span>
+</div>
+
+@code {
+    private bool _inicializado;
+
+    protected override void OnInitialized()
+    {
+        Prefs.Cambio += AlCambiarPreferencias;
+        Nav.LocationChanged += AlCambiarRuta;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _inicializado)
+        {
+            return;
+        }
+
+        _inicializado = true;
+        try
+        {
+            var tema = await JS.InvokeAsync<string>("plagio.theme.actual");
+            Prefs.EstablecerTema(!string.Equals(tema, "light", StringComparison.OrdinalIgnoreCase));
+            var ciego = await JS.InvokeAsync<bool>("plagio.blind.obtener");
+            Prefs.EstablecerModoCiego(ciego);
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            // JS puede no estar disponible durante la hidratación inicial; se usa el tema por defecto.
+        }
+    }
+
+    private async Task AlternarTema()
+    {
+        try
+        {
+            var tema = await JS.InvokeAsync<string>("plagio.theme.alternar");
+            Prefs.EstablecerTema(!string.Equals(tema, "light", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            Prefs.EstablecerTema(!Prefs.TemaOscuro);
+        }
+    }
+
+    private async Task AlternarModoCiego()
+    {
+        var nuevo = !Prefs.ModoCiego;
+        Prefs.EstablecerModoCiego(nuevo);
+        try
+        {
+            await JS.InvokeVoidAsync("plagio.blind.guardar", nuevo);
+        }
+        catch
+        {
+            // Preferencia solo válida para esta sesión.
+        }
+    }
+
+    private async Task AlternarMenu()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("plagio.sidebar.alternar");
+        }
+        catch
+        {
+            // Sin JS no hay menú móvil, pero el layout de escritorio sigue disponible.
+        }
+    }
+
+    private async Task CerrarMenu()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("plagio.sidebar.cerrar");
+        }
+        catch
+        {
+        }
+    }
+
+    private void AlCambiarRuta(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => _ = CerrarMenu();
+
+    private void AlCambiarPreferencias() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Prefs.Cambio -= AlCambiarPreferencias;
+        Nav.LocationChanged -= AlCambiarRuta;
+    }
+}

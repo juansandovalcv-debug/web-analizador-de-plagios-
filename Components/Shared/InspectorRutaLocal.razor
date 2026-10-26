@@ -1,0 +1,88 @@
+@inject InspectorMetadatos Inspector
+@inject ILogger<InspectorRutaLocal> Logger
+
+<div class="panel inset-panel">
+    <div class="panel-heading">
+        <div>
+            <h3><Icon Nombre="search" Tamano="17" /> Inspeccionar una ruta local</h3>
+            <p>Lea fechas, propietario NTFS, codificación y hash de un archivo original del equipo. La ruta se valida contra las carpetas autorizadas.</p>
+        </div>
+    </div>
+
+    <form class="inline-form" @onsubmit="InspeccionarAsync" @onsubmit:preventDefault>
+        <div class="field grow">
+            <label for="ruta-local">Ruta absoluta o relativa</label>
+            <input id="ruta-local" class="input" @bind="_ruta" placeholder="C:\Users\...\Desktop\Program.cs" autocomplete="off" />
+        </div>
+        <button type="submit" class="btn btn-secondary" disabled="@_cargando">
+            @if (_cargando)
+            {
+                <span class="spinner small"></span>
+            }
+            else
+            {
+                <Icon Nombre="scan" Tamano="16" />
+            }
+            Inspeccionar
+        </button>
+    </form>
+
+    <p class="help-text">
+        Carpetas autorizadas por defecto: Escritorio, Documentos, Descargas y la carpeta de la aplicación.
+        Puede ampliarlas en <code>appsettings.json → Inspector:RutasPermitidas</code>.
+    </p>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-error">
+            <Icon Nombre="alert" Tamano="17" />
+            <span>@_error</span>
+        </div>
+    }
+
+    @if (_resultado?.Metadatos is not null)
+    {
+        <div class="alert alert-success">
+            <Icon Nombre="check" Tamano="17" />
+            <span>@_resultado.Mensaje</span>
+        </div>
+        <MetadataCard Metadatos="_resultado.Metadatos" MostrarRuta="true" />
+    }
+</div>
+
+@code {
+    private string _ruta = string.Empty;
+    private bool _cargando;
+    private string? _error;
+    private ResultadoInspeccionRuta? _resultado;
+
+    private async Task InspeccionarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_ruta))
+        {
+            _error = "Escriba una ruta de archivo.";
+            return;
+        }
+
+        _cargando = true;
+        _error = null;
+        _resultado = null;
+        try
+        {
+            _resultado = await Inspector.InspeccionarRutaLocalAsync(_ruta.Trim());
+            if (_resultado is { Exito: false })
+            {
+                _error = _resultado.Mensaje;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error inesperado inspeccionando ruta local");
+            _error = $"Error inesperado: {ex.Message}";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+}

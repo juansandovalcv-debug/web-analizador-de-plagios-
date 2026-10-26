@@ -1,0 +1,559 @@
+@page "/analisis"
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ServicioAnalisis Analizador
+@inject PreferenciasUi Prefs
+@inject NavigationManager Nav
+@inject ILogger<Analisis> Logger
+
+<PageTitle>Analizar entrega · Analizador de Plagios</PageTitle>
+
+<div class="page-header">
+    <div>
+        <span class="eyebrow">Motor de comparación</span>
+        <h1>Analizar una entrega</h1>
+        <p class="page-subtitle">Cargue el código de un estudiante y compárelo con otra entrega o con todo el corpus del grupo. La similitud y las señales de IA se calculan en este equipo.</p>
+    </div>
+    <div class="page-actions">
+        <button type="button" class="btn btn-ghost" @onclick="LimpiarAsync" disabled="@_analizando">
+            <Icon Nombre="refresh" Tamano="16" /> Limpiar
+        </button>
+        <a class="btn btn-ghost" href="grupos">
+            <Icon Nombre="users" Tamano="16" /> Gestionar grupos
+        </a>
+    </div>
+</div>
+
+@if (_cargando)
+{
+    <div class="loading-state"><span class="spinner large"></span> Cargando grupos y estudiantes…</div>
+}
+else if (!string.IsNullOrWhiteSpace(_errorCarga))
+{
+    <div class="alert alert-error">
+        <Icon Nombre="alert" Tamano="18" />
+        <div>
+            <strong>No se pudo preparar el análisis.</strong>
+            <div>@_errorCarga</div>
+        </div>
+    </div>
+}
+else if (_grupos.Count == 0)
+{
+    <div class="empty-state">
+        <Icon Nombre="users" Tamano="36" />
+        <strong>Primero cree un grupo con estudiantes</strong>
+        <span>Para asociar la entrega a un estudiante y compararla con el corpus, registre el grupo y su lista.</span>
+        <a class="btn btn-primary btn-sm mt-2" href="grupos"><Icon Nombre="plus" Tamano="14" /> Ir a Grupos</a>
+    </div>
+}
+else
+{
+    if (Prefs.ModoCiego)
+    {
+        <div class="blind-banner">
+            <Icon Nombre="eye-off" Tamano="17" />
+            <span>Modo a ciegas activo: los estudiantes se muestran con un identificador temporal. Desactívelo en la barra superior para elegir por nombre.</span>
+        </div>
+    }
+
+    <section class="panel mb-2">
+        <div class="row-between">
+            <div class="row">
+                <div class="field" style="min-width: 300px;">
+                    <label for="grupo-analisis">Grupo de trabajo</label>
+                    <select id="grupo-analisis" class="select" @bind="_grupoId" @bind:after="AlCambiarGrupoAsync" disabled="@_analizando">
+                        <option value="0">Seleccione un grupo…</option>
+                        @foreach (var grupo in _grupos)
+                        {
+                            <option value="@grupo.Id">@grupo.Nombre · @grupo.Ciclo @grupo.Anio · C@(@grupo.Computo)</option>
+                        }
+                    </select>
+                </div>
+
+                @if (_grupoActual is not null)
+                {
+                    <div class="group-meta-line">
+                        <span class="chip chip-accent">@_grupoActual.Codigo</span>
+                        <span class="chip">@_totalEstudiantes estudiante(s)</span>
+                        <span class="chip">@_totalEvaluaciones entrega(s)</span>
+                        <span class="chip">Sim. prom. <b>@_promedioSimilitud.ToString("F1")%</b></span>
+                        <span class="chip">IA prom. <b>@_promedioIa.ToString("F1")%</b></span>
+                    </div>
+                }
+            </div>
+
+            <label class="switch-inline" title="Si se desactiva, la entrega A se compara con todas las entregas previas del grupo.">
+                <input type="checkbox" @bind="_compararDos" disabled="@_analizando" />
+                <span>Comparación directa A ↔ B</span>
+            </label>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <div class="row-between">
+            <div class="method-note">
+                <span class="chip chip-accent">55% Levenshtein de tokens</span>
+                <span class="chip chip-info">25% Jaccard de shingles</span>
+                <span class="chip chip-warn">20% Levenshtein de líneas</span>
+                <span class="chip">IA: señales explicables</span>
+            </div>
+            <label class="checkbox">
+                <input type="checkbox" @bind="_guardarHistorial" disabled="@_analizando" />
+                Guardar en historial y tendencias
+            </label>
+        </div>
+    </section>
+
+    <div class="analysis-grid">
+        <section class="upload-card">
+            <div class="upload-card-head">
+                <div>
+                    <h3><span class="upload-letter">A</span> Entrega principal</h3>
+                    <p>Se analiza individualmente y se compara con la referencia.</p>
+                </div>
+                @if (_grupoActual is not null)
+                {
+                    <span class="badge badge-medio">C@(@_grupoActual.Computo)</span>
+                }
+            </div>
+
+            <div class="field">
+                <label for="estudiante-a">Estudiante de la entrega A</label>
+                <select id="estudiante-a" class="select" @bind="_estudianteAId" disabled="@_analizando">
+                    <option value="0">Seleccione el estudiante…</option>
+                    @foreach (var estudiante in _estudiantes)
+                    {
+                        <option value="@estudiante.Id">@Prefs.NombreVisible(estudiante.Id, estudiante.Nombre) · @Prefs.CarnetVisible(estudiante.Id, estudiante.Carnet)</option>
+                    }
+                </select>
+            </div>
+
+            <FileDropZone @ref="_zonaA"
+                          Etiqueta="Arrastra la entrega A"
+                          Descripcion="Código .cs, texto .txt o captura para OCR"
+                          Disabled="@_analizando"
+                          OnArchivo="SeleccionarA" />
+
+            @if (_archivoA is not null)
+            {
+                <div class="file-preview">
+                    <span>Archivo: <strong>@_archivoA.Nombre</strong></span>
+                    <span>@FormatearTamano(_archivoA.TamanoBytes) · @(_archivoA.EsImagen ? "Se aplicará OCR Tesseract" : "Texto/código detectado")</span>
+                </div>
+            }
+        </section>
+
+        @if (_compararDos)
+        {
+            <section class="upload-card">
+                <div class="upload-card-head">
+                    <div>
+                        <h3><span class="upload-letter">B</span> Entrega de referencia</h3>
+                        <p>Comparación directa lado a lado con la entrega A.</p>
+                    </div>
+                    @if (_grupoActual is not null)
+                    {
+                        <span class="badge badge-medio">C@(@_grupoActual.Computo)</span>
+                    }
+                </div>
+
+                <div class="field">
+                    <label for="estudiante-b">Estudiante de la entrega B</label>
+                    <select id="estudiante-b" class="select" @bind="_estudianteBId" disabled="@_analizando">
+                        <option value="0">Seleccione el estudiante…</option>
+                        @foreach (var estudiante in _estudiantes)
+                        {
+                            <option value="@estudiante.Id">@Prefs.NombreVisible(estudiante.Id, estudiante.Nombre) · @Prefs.CarnetVisible(estudiante.Id, estudiante.Carnet)</option>
+                        }
+                    </select>
+                </div>
+
+                <FileDropZone @ref="_zonaB"
+                              Etiqueta="Arrastra la entrega B"
+                              Descripcion="Segunda entrega para el diff directo"
+                              Disabled="@_analizando"
+                              OnArchivo="SeleccionarB" />
+
+                @if (_archivoB is not null)
+                {
+                    <div class="file-preview">
+                        <span>Archivo: <strong>@_archivoB.Nombre</strong></span>
+                        <span>@FormatearTamano(_archivoB.TamanoBytes) · @(_archivoB.EsImagen ? "Se aplicará OCR Tesseract" : "Texto/código detectado")</span>
+                    </div>
+                }
+            </section>
+        }
+        else
+        {
+            <section class="upload-card" style="justify-content: center;">
+                <div class="empty-state compact">
+                    <Icon Nombre="database" Tamano="30" />
+                    <strong>Comparación contra el corpus</strong>
+                    <span>La entrega A se comparará con las entregas previas de los demás estudiantes del grupo. Se mostrará la mejor coincidencia y el diff completo con ella.</span>
+                </div>
+            </section>
+        }
+    </div>
+
+    <div class="analysis-actions">
+        <div class="hint">
+            @if (_grupoActual is null)
+            {
+                <span>Seleccione un grupo para cargar su lista de estudiantes.</span>
+            }
+            else if (_estudiantes.Count == 0)
+            {
+                <span>El grupo no tiene estudiantes. <a href="@($"grupos")">Agregue la lista</a> antes de analizar.</span>
+            }
+            else if (_compararDos)
+            {
+                <span>Ambas entregas deben pertenecer a estudiantes distintos del grupo. El análisis se guarda con su historial si la opción está marcada.</span>
+            }
+            else
+            {
+                <span>Se usarán hasta 60 entregas recientes del grupo como corpus de comparación.</span>
+            }
+        </div>
+
+        <div class="row">
+            <button type="button" class="btn btn-ghost" @onclick="LimpiarAsync" disabled="@_analizando">Limpiar archivos</button>
+            <button type="button" class="btn btn-primary" @onclick="EjecutarAsync" disabled="@_analizando">
+                @if (_analizando)
+                {
+                    <span class="spinner small"></span>
+                    <span>Analizando…</span>
+                }
+                else
+                {
+                    <Icon Nombre="scan" Tamano="17" />
+                    <span>Ejecutar análisis</span>
+                }
+            </button>
+        </div>
+    </div>
+
+    @if (_analizando)
+    {
+        <div class="panel mt-2">
+            <div class="loading-state">
+                <span class="spinner"></span>
+                <div>
+                    <strong>Procesando la entrega…</strong>
+                    <p class="small muted mb-0">Normalizando código, calculando Levenshtein y shingles, generando el diff y evaluando señales de IA.</p>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_errorAnalisis))
+    {
+        <div class="alert alert-error mt-2">
+            <Icon Nombre="alert" Tamano="18" />
+            <div>
+                <strong>No se pudo completar el análisis.</strong>
+                <div>@_errorAnalisis</div>
+            </div>
+        </div>
+    }
+
+    @if (_advertencias.Count > 0 && !_analizando)
+    {
+        <div class="alert alert-warning small mt-2">
+            <Icon Nombre="alert" Tamano="16" />
+            <div>
+                @foreach (var advertencia in _advertencias)
+                {
+                    <div>@advertencia</div>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "grupoId")]
+    public int? GrupoId { get; set; }
+
+    private bool _cargando = true;
+    private bool _analizando;
+    private string? _errorCarga;
+    private string? _errorAnalisis;
+    private List<string> _advertencias = new();
+
+    private List<GrupoResumen> _grupos = new();
+    private List<Estudiante> _estudiantes = new();
+    private int _grupoId;
+    private GrupoResumen? _grupoActual;
+    private int _totalEstudiantes;
+    private int _totalEvaluaciones;
+    private double _promedioSimilitud;
+    private double _promedioIa;
+
+    private int _estudianteAId;
+    private int _estudianteBId;
+    private bool _compararDos = true;
+    private bool _guardarHistorial = true;
+    private ArchivoSeleccionado? _archivoA;
+    private ArchivoSeleccionado? _archivoB;
+
+    private FileDropZone? _zonaA;
+    private FileDropZone? _zonaB;
+
+    protected override void OnInitialized()
+    {
+        Prefs.Cambio += AlCambiarPreferencias;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _grupos = await db.Grupos
+                .AsNoTracking()
+                .OrderByDescending(g => g.Anio)
+                .ThenBy(g => g.Ciclo)
+                .ThenBy(g => g.Computo)
+                .ThenBy(g => g.Nombre)
+                .Select(g => new GrupoResumen
+                {
+                    Id = g.Id,
+                    Nombre = g.Nombre,
+                    Codigo = g.Codigo,
+                    Anio = g.Anio,
+                    Ciclo = g.Ciclo,
+                    Computo = g.Computo,
+                    Descripcion = g.Descripcion,
+                    TotalEstudiantes = g.Estudiantes.Count,
+                    TotalEvaluaciones = g.Evaluaciones.Count,
+                    PromedioSimilitud = g.Evaluaciones.Select(e => (double?)e.Similitud).Average() ?? 0,
+                    PromedioIA = g.Evaluaciones.Select(e => (double?)e.ProbabilidadIA).Average() ?? 0
+                })
+                .ToListAsync();
+
+            var seleccionado = GrupoId is int solicitado && _grupos.Any(g => g.Id == solicitado)
+                ? solicitado
+                : _grupos.FirstOrDefault()?.Id ?? 0;
+
+            if (seleccionado > 0)
+            {
+                _grupoId = seleccionado;
+                await CargarGrupoAsync(seleccionado);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando el panel de análisis");
+            _errorCarga = $"No se pudieron cargar los datos: {ex.Message}";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task AlCambiarGrupoAsync()
+    {
+        _estudianteAId = 0;
+        _estudianteBId = 0;
+        _archivoA = null;
+        _archivoB = null;
+        _errorAnalisis = null;
+        _advertencias.Clear();
+
+        if (_zonaA is not null)
+        {
+            await _zonaA.ReiniciarAsync();
+        }
+
+        if (_zonaB is not null)
+        {
+            await _zonaB.ReiniciarAsync();
+        }
+
+        await CargarGrupoAsync(_grupoId);
+    }
+
+    private async Task CargarGrupoAsync(int grupoId)
+    {
+        _grupoActual = _grupos.FirstOrDefault(g => g.Id == grupoId);
+        _estudiantes = new List<Estudiante>();
+        _totalEstudiantes = 0;
+        _totalEvaluaciones = 0;
+        _promedioSimilitud = 0;
+        _promedioIa = 0;
+
+        if (grupoId <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _estudiantes = await db.Estudiantes
+                .AsNoTracking()
+                .Where(e => e.GrupoId == grupoId)
+                .OrderBy(e => e.Nombre)
+                .ToListAsync();
+
+            _totalEstudiantes = _estudiantes.Count;
+            _totalEvaluaciones = await db.Evaluaciones.CountAsync(e => e.GrupoId == grupoId);
+            _promedioSimilitud = await db.Evaluaciones
+                .Where(e => e.GrupoId == grupoId)
+                .Select(e => (double?)e.Similitud)
+                .AverageAsync() ?? 0;
+            _promedioIa = await db.Evaluaciones
+                .Where(e => e.GrupoId == grupoId)
+                .Select(e => (double?)e.ProbabilidadIA)
+                .AverageAsync() ?? 0;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando estudiantes del grupo {GrupoId}", grupoId);
+            _errorAnalisis = $"No se pudieron cargar los estudiantes: {ex.Message}";
+        }
+    }
+
+    private void SeleccionarA(ArchivoSeleccionado? archivo)
+    {
+        _archivoA = archivo;
+        _errorAnalisis = null;
+    }
+
+    private void SeleccionarB(ArchivoSeleccionado? archivo)
+    {
+        _archivoB = archivo;
+        _errorAnalisis = null;
+    }
+
+    private async Task EjecutarAsync()
+    {
+        _errorAnalisis = null;
+        _advertencias = new List<string>();
+
+        if (_grupoId <= 0)
+        {
+            _errorAnalisis = "Seleccione un grupo.";
+            return;
+        }
+
+        if (_estudiantes.Count == 0)
+        {
+            _errorAnalisis = "El grupo seleccionado no tiene estudiantes. Agregue la lista en la sección Grupos.";
+            return;
+        }
+
+        if (_estudianteAId <= 0)
+        {
+            _errorAnalisis = "Seleccione el estudiante de la entrega A.";
+            return;
+        }
+
+        if (_archivoA is null)
+        {
+            _errorAnalisis = "Cargue el archivo de la entrega A.";
+            return;
+        }
+
+        if (_compararDos)
+        {
+            if (_estudianteBId <= 0)
+            {
+                _errorAnalisis = "Seleccione el estudiante de la entrega B.";
+                return;
+            }
+
+            if (_archivoB is null)
+            {
+                _errorAnalisis = "Cargue el archivo de la entrega B.";
+                return;
+            }
+
+            if (_estudianteAId == _estudianteBId)
+            {
+                _errorAnalisis = "Las entregas A y B deben pertenecer a estudiantes distintos.";
+                return;
+            }
+        }
+
+        _analizando = true;
+        try
+        {
+            var solicitud = new SolicitudAnalisis
+            {
+                GrupoId = _grupoId,
+                GuardarEnHistorial = _guardarHistorial,
+                ArchivoA = CrearEntrada(_archivoA, _estudianteAId),
+                ArchivoB = _compararDos && _archivoB is not null ? CrearEntrada(_archivoB, _estudianteBId) : null
+            };
+
+            var resultado = await Analizador.AnalizarAsync(solicitud);
+            _advertencias = resultado.Advertencias;
+
+            Logger.LogInformation("Análisis {EvaluacionId} completado: similitud {Similitud:F1}%, IA {Ia:F1}%",
+                resultado.EvaluacionId, resultado.Similitud, resultado.ProbabilidadIA);
+
+            Nav.NavigateTo($"resultados/{resultado.EvaluacionId}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _errorAnalisis = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error ejecutando el análisis");
+            _errorAnalisis = $"Error inesperado del motor de análisis: {ex.Message}";
+        }
+        finally
+        {
+            _analizando = false;
+        }
+    }
+
+    private static ArchivoEntrada CrearEntrada(ArchivoSeleccionado archivo, int estudianteId) => new()
+    {
+        Nombre = archivo.Nombre,
+        TipoContenido = archivo.TipoContenido,
+        UltimaModificacion = archivo.UltimaModificacion,
+        Bytes = archivo.Bytes,
+        EstudianteId = estudianteId
+    };
+
+    private async Task LimpiarAsync()
+    {
+        _archivoA = null;
+        _archivoB = null;
+        _estudianteAId = 0;
+        _estudianteBId = 0;
+        _errorAnalisis = null;
+        _advertencias.Clear();
+
+        if (_zonaA is not null)
+        {
+            await _zonaA.ReiniciarAsync();
+        }
+
+        if (_zonaB is not null)
+        {
+            await _zonaB.ReiniciarAsync();
+        }
+    }
+
+    private static string FormatearTamano(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        return bytes < 1024 * 1024
+            ? $"{bytes / 1024d:0.#} KB"
+            : $"{bytes / (1024d * 1024d):0.##} MB";
+    }
+
+    private void AlCambiarPreferencias() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Prefs.Cambio -= AlCambiarPreferencias;
+}

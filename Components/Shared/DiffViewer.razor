@@ -1,0 +1,93 @@
+@if (Resultado is null)
+{
+    <div class="empty-state compact">
+        <Icon Nombre="code" Tamano="28" />
+        <strong>Sin comparación disponible</strong>
+        <span>Esta entrega no tiene un archivo de referencia registrado.</span>
+    </div>
+}
+else
+{
+    <div class="diff-toolbar">
+        <div class="diff-legend">
+            <span class="legend-item"><i class="dot dot-equal"></i> Coincide</span>
+            <span class="legend-item"><i class="dot dot-modified"></i> Modificada</span>
+            <span class="legend-item"><i class="dot dot-left"></i> Solo izquierda</span>
+            <span class="legend-item"><i class="dot dot-right"></i> Solo derecha</span>
+        </div>
+        <label class="switch-inline">
+            <input type="checkbox" @bind="SoloDiferencias" />
+            <span>Solo diferencias</span>
+        </label>
+    </div>
+
+    <div class="diff-summary">
+        <span class="chip">Levenshtein tokens: <b>@Resultado.SimilitudTokens.ToString("F1")%</b></span>
+        <span class="chip">Jaccard: <b>@Resultado.JaccardShingles.ToString("F1")%</b></span>
+        <span class="chip">Líneas: <b>@Resultado.SimilitudLineas.ToString("F1")%</b></span>
+        <span class="chip">Iguales: <b>@Resultado.LineasIguales</b></span>
+        <span class="chip">Modificadas: <b>@Resultado.LineasModificadas</b></span>
+    </div>
+
+    @if (Resultado.Truncado)
+    {
+        <div class="alert alert-warning small">
+            <Icon Nombre="alert" Tamano="16" />
+            El archivo es grande: el diff se limitó a 1.800 líneas por lado.
+        </div>
+    }
+
+    <div class="diff-scroll">
+        <table class="diff-table">
+            <thead>
+                <tr>
+                    <th colspan="2">@NombreIzquierda</th>
+                    <th colspan="2">@NombreDerecha</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (FilasVisibles.Count == 0)
+                {
+                    <tr>
+                        <td colspan="4" class="diff-empty">No hay diferencias para mostrar.</td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var fila in FilasVisibles)
+                    {
+                        <tr class="@ClaseFila(fila.Estado)">
+                            <td class="diff-line-no">@(fila.NumeroIzquierda?.ToString() ?? "")</td>
+                            <td class="diff-code diff-left"><span>@fila.TextoIzquierda</span></td>
+                            <td class="diff-line-no">@(fila.NumeroDerecha?.ToString() ?? "")</td>
+                            <td class="diff-code diff-right"><span>@fila.TextoDerecha</span></td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter] public ResultadoSimilitud? Resultado { get; set; }
+    [Parameter] public string NombreIzquierda { get; set; } = "Archivo A";
+    [Parameter] public string NombreDerecha { get; set; } = "Archivo B";
+
+    private bool SoloDiferencias { get; set; }
+
+    private List<LineaDiff> FilasVisibles => Resultado is null
+        ? new List<LineaDiff>()
+        : SoloDiferencias
+            ? Resultado.Filas.Where(f => f.Estado != EstadoLineaDiff.Igual).ToList()
+            : Resultado.Filas;
+
+    private static string ClaseFila(EstadoLineaDiff estado) => estado switch
+    {
+        EstadoLineaDiff.Igual => "diff-row-equal",
+        EstadoLineaDiff.Modificada => "diff-row-modified",
+        EstadoLineaDiff.SoloIzquierda => "diff-row-left",
+        EstadoLineaDiff.SoloDerecha => "diff-row-right",
+        _ => string.Empty
+    };
+}

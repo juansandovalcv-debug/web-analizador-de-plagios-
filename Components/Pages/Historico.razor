@@ -1,0 +1,637 @@
+@page "/historico"
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject PreferenciasUi Prefs
+@inject ILogger<Historico> Logger
+
+<PageTitle>Histórico y tendencias · Analizador de Plagios</PageTitle>
+
+<div class="page-header">
+    <div>
+        <span class="eyebrow">Seguimiento longitudinal</span>
+        <h1>Histórico y tendencias</h1>
+        <p class="page-subtitle">Observe cómo evolucionan la similitud y las señales de IA por estudiante y por cómputo. La identidad se mantiene estable entre grupos mediante el carnet.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-ghost" href="api/resultados/exportar.csv">
+            <Icon Nombre="download" Tamano="16" /> Exportar CSV
+        </a>
+        <a class="btn btn-primary" href="analisis">
+            <Icon Nombre="scan" Tamano="16" /> Nuevo análisis
+        </a>
+    </div>
+</div>
+
+@if (Prefs.ModoCiego)
+{
+    <div class="blind-banner">
+        <Icon Nombre="eye-off" Tamano="17" />
+        <span>Modo a ciegas activo: la identidad se oculta en la tabla y en las etiquetas de la gráfica.</span>
+    </div>
+}
+
+<div class="stat-grid">
+    <article class="stat-card">
+        <div class="stat-top"><span class="stat-label">Ejecuciones registradas</span><span class="stat-icon"><Icon Nombre="clock" Tamano="17" /></span></div>
+        <div class="stat-value">@_totalRegistros</div>
+        <div class="stat-hint">Instantáneas del motor en el historial</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span class="stat-label">Similitud media</span><span class="stat-icon"><Icon Nombre="scale" Tamano="17" /></span></div>
+        <div class="stat-value">@_promedioSim.ToString("F1")<small>%</small></div>
+        <div class="stat-hint">Según los filtros activos</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span class="stat-label">Probabilidad IA media</span><span class="stat-icon"><Icon Nombre="sparkles" Tamano="17" /></span></div>
+        <div class="stat-value">@_promedioIa.ToString("F1")<small>%</small></div>
+        <div class="stat-hint">Señal heurística acumulada</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span class="stat-label">Estudiantes seguidos</span><span class="stat-icon"><Icon Nombre="users" Tamano="17" /></span></div>
+        <div class="stat-value">@_totalEstudiantes</div>
+        <div class="stat-hint">Carnets distintos en el historial</div>
+    </article>
+</div>
+
+<section class="filters panel">
+    <div class="field grow">
+        <label for="buscar-alumno">Buscar estudiante por nombre o carnet</label>
+        <input id="buscar-alumno" class="input" @bind="_busqueda" @bind:event="oninput"
+               placeholder="Escriba para filtrar la lista de estudiantes…" autocomplete="off" />
+    </div>
+
+    <div class="field" style="min-width: 280px;">
+        <label for="alumno-tendencia">Estudiante para la tendencia</label>
+        <select id="alumno-tendencia" class="select" @bind="_carnetSeleccionado" @bind:after="RecargarAsync">
+            <option value="">Todos (agregado)</option>
+            @foreach (var alumno in AlumnosFiltrados)
+            {
+                <option value="@alumno.Carnet">@EtiquetaAlumno(alumno)</option>
+            }
+        </select>
+    </div>
+
+    <div class="field">
+        <label for="filtro-ciclo-historico">Ciclo</label>
+        <select id="filtro-ciclo-historico" class="select" @bind="_filtroCiclo" @bind:after="RecargarAsync">
+            <option value="">Todos</option>
+            @foreach (var ciclo in _ciclos)
+            {
+                <option value="@ciclo">@ciclo</option>
+            }
+        </select>
+    </div>
+
+    <div class="field">
+        <label for="filtro-anio-historico">Año</label>
+        <select id="filtro-anio-historico" class="select" @bind="_filtroAnio" @bind:after="RecargarAsync">
+            <option value="0">Todos</option>
+            @foreach (var anio in _anios)
+            {
+                <option value="@anio">@anio</option>
+            }
+        </select>
+    </div>
+
+    <div class="field">
+        <label for="filtro-computo-historico">Cómputo</label>
+        <select id="filtro-computo-historico" class="select" @bind="_filtroComputo" @bind:after="RecargarAsync">
+            <option value="0">Todos</option>
+            <option value="1">Cómputo 1</option>
+            <option value="2">Cómputo 2</option>
+            <option value="3">Cómputo 3</option>
+        </select>
+    </div>
+
+    <div class="filter-actions">
+        <button type="button" class="btn btn-ghost btn-sm" @onclick="LimpiarFiltrosAsync">
+            <Icon Nombre="refresh" Tamano="14" /> Limpiar
+        </button>
+    </div>
+</section>
+
+@if (_cargando)
+{
+    <div class="loading-state"><span class="spinner large"></span> Calculando tendencias…</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-error">
+        <Icon Nombre="alert" Tamano="18" />
+        <div>
+            <strong>No se pudo cargar el histórico.</strong>
+            <div>@_error</div>
+        </div>
+    </div>
+}
+else if (_totalRegistros == 0)
+{
+    <div class="empty-state">
+        <Icon Nombre="chart" Tamano="34" />
+        <strong>Sin historial para estos filtros</strong>
+        <span>Active «Guardar en historial» al analizar entregas o amplíe los filtros de ciclo, año y cómputo.</span>
+        <button type="button" class="btn btn-ghost btn-sm mt-2" @onclick="LimpiarFiltrosAsync">Limpiar filtros</button>
+    </div>
+}
+else
+{
+    <div class="grid-sidebar">
+        <div class="stack">
+            <section class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3><Icon Nombre="chart" Tamano="17" /> Evolución global por cómputo</h3>
+                        <p>Promedio de todas las ejecuciones registradas en cada cómputo, con los filtros activos.</p>
+                    </div>
+                </div>
+                <TendenciaChart Etiquetas="_etiquetasGlobales"
+                                SerieASimilitud="_serieSimGlobal"
+                                SerieBIA="_serieIaGlobal"
+                                NombreA="Similitud media"
+                                NombreB="Probabilidad IA media" />
+            </section>
+
+            @if (!string.IsNullOrWhiteSpace(_carnetSeleccionado))
+            {
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3><Icon Nombre="activity" Tamano="17" /> Tendencia del estudiante</h3>
+                            <p>@EtiquetaAlumnoSeleccionado · promedio por periodo. El eje sigue el orden año, ciclo y cómputo.</p>
+                        </div>
+                        @if (_tendenciaAlumno.Count >= 2)
+                        {
+                            var primero = _tendenciaAlumno[0];
+                            var ultimo = _tendenciaAlumno[^1];
+                            var delta = ultimo.Similitud - primero.Similitud;
+                            <span class="chip @(delta > 0.05 ? "chip-danger" : delta < -0.05 ? "chip-ok" : null)">
+                                Δ similitud @delta.ToString("+0.0;-0.0;0.0") pts
+                            </span>
+                        }
+                    </div>
+
+                    @if (_tendenciaAlumno.Count == 0)
+                    {
+                        <div class="empty-mini">No hay registros de este estudiante con los filtros actuales.</div>
+                    }
+                    else
+                    {
+                        <TendenciaChart Etiquetas="_etiquetasAlumno"
+                                        SerieASimilitud="_serieSimAlumno"
+                                        SerieBIA="_serieIaAlumno"
+                                        NombreA="Similitud"
+                                        NombreB="Probabilidad IA" />
+
+                        <div class="table-wrapper mt-2">
+                            <table class="data-table trend-table">
+                                <thead>
+                                    <tr>
+                                        <th>Periodo</th>
+                                        <th>Ejecuciones</th>
+                                        <th>Similitud</th>
+                                        <th>IA</th>
+                                        <th>Variación</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (var i = 0; i < _tendenciaAlumno.Count; i++)
+                                    {
+                                        var fila = _tendenciaAlumno[i];
+                                        var anterior = i > 0 ? _tendenciaAlumno[i - 1] : null;
+                                        <tr>
+                                            <td class="primary-cell">@fila.Etiqueta</td>
+                                            <td class="trend-cell">@fila.Total</td>
+                                            <td class="trend-cell">@fila.Similitud.ToString("F1")%</td>
+                                            <td class="trend-cell">@fila.IA.ToString("F1")%</td>
+                                            <td class="trend-cell">
+                                                @if (anterior is null)
+                                                {
+                                                    <span class="trend-flat">—</span>
+                                                }
+                                                else
+                                                {
+                                                    var delta = fila.Similitud - anterior.Similitud;
+                                                    <span class="@(delta > 0.05 ? "trend-up" : delta < -0.05 ? "trend-down" : "trend-flat")">
+                                                        @delta.ToString("+0.0;-0.0;0.0") pts
+                                                    </span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </section>
+            }
+
+            <section class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3><Icon Nombre="list" Tamano="17" /> Ejecuciones recientes</h3>
+                        <p>Últimos 100 registros que cumplen los filtros. Cada fila abre el resultado asociado.</p>
+                    </div>
+                </div>
+
+                @if (_filas.Count == 0)
+                {
+                    <div class="empty-mini">No hay ejecuciones para mostrar.</div>
+                }
+                else
+                {
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Estudiante</th>
+                                    <th>Periodo</th>
+                                    <th>Origen</th>
+                                    <th>Similitud</th>
+                                    <th>IA</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var fila in _filas)
+                                {
+                                    <tr>
+                                        <td class="tiny muted nowrap">@fila.Fecha.ToLocalTime().ToString("dd/MM/yy HH:mm")</td>
+                                        <td>
+                                            <div class="student-name">
+                                                <strong>@Prefs.NombreVisible(fila.EstudianteId, fila.EstudianteNombre)</strong>
+                                                <span>@Prefs.CarnetVisible(fila.EstudianteId, fila.EstudianteCarnet)</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="primary-cell">@fila.Ciclo @fila.Anio · C@(@fila.Computo)</div>
+                                            <span class="tiny muted">@fila.GrupoNombre</span>
+                                        </td>
+                                        <td class="tiny muted">@fila.Origen</td>
+                                        <td>
+                                            <span class="metric-number @ClaseSimilitud(fila.Similitud)">@fila.Similitud.ToString("F1")%</span>
+                                        </td>
+                                        <td>
+                                            <span class="metric-number @(fila.ProbabilidadIA >= 60 ? "warn" : fila.ProbabilidadIA >= 40 ? "info" : "ok")">@fila.ProbabilidadIA.ToString("F1")%</span>
+                                        </td>
+                                        <td class="actions-cell">
+                                            <a class="btn btn-ghost btn-sm" href="@($"resultados/{fila.EvaluacionId}")">Abrir</a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        </div>
+
+        <div class="stack">
+            <section class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3><Icon Nombre="target" Tamano="17" /> Lectura de la tendencia</h3>
+                        <p>Cómo interpretar las series sin convertir la señal en una sentencia.</p>
+                    </div>
+                </div>
+                <div class="stack-sm">
+                    <div class="summary-row"><span>Cómputos con datos</span><strong>@_etiquetasGlobales.Count</strong></div>
+                    <div class="summary-row"><span>Ejecuciones mostradas</span><strong>@_filas.Count</strong></div>
+                    <div class="summary-row"><span>Estudiante seleccionado</span><strong>@(string.IsNullOrWhiteSpace(_carnetSeleccionado) ? "Agregado" : EtiquetaAlumnoSeleccionado)</strong></div>
+                </div>
+                <div class="form-divider"></div>
+                <div class="metadata-note">
+                    <Icon Nombre="info" Tamano="15" />
+                    <span>La similitud compara estructura y texto; la probabilidad de IA es una estimación de estilo. Una variación al alza es una señal para revisar la defensa, no una conclusión disciplinaria.</span>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3><Icon Nombre="database" Tamano="17" /> Cobertura del historial</h3>
+                        <p>Distribución de ejecuciones por cómputo.</p>
+                    </div>
+                </div>
+                <div class="computo-grid">
+                    @for (var c = 1; c <= 3; c++)
+                    {
+                        var total = _globalPorComputo.FirstOrDefault(x => x.Computo == c)?.Total ?? 0;
+                        <div class="computo-card">
+                            <span>Cómputo @c</span>
+                            <strong>@total</strong>
+                            <small>ejecución(es)</small>
+                        </div>
+                    }
+                </div>
+
+                @if (string.IsNullOrWhiteSpace(_carnetSeleccionado))
+                {
+                    <p class="help-text">
+                        Seleccione un estudiante para ver su evolución individual. Los estudiantes se emparejan por carnet entre grupos y ciclos.
+                    </p>
+                }
+                else
+                {
+                    <p class="help-text">
+                        El estudiante seleccionado tiene @_tendenciaAlumno.Sum(t => t.Total) registro(s) en @_tendenciaAlumno.Count periodo(s).
+                    </p>
+                }
+            </section>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _cargando = true;
+    private string? _error;
+
+    private List<string> _ciclos = new();
+    private List<int> _anios = new();
+    private List<AlumnoOpcion> _alumnos = new();
+
+    private string _busqueda = string.Empty;
+    private string _carnetSeleccionado = string.Empty;
+    private string _filtroCiclo = string.Empty;
+    private int _filtroAnio;
+    private int _filtroComputo;
+
+    private int _totalRegistros;
+    private double _promedioSim;
+    private double _promedioIa;
+    private int _totalEstudiantes;
+
+    private List<ComputoGlobal> _globalPorComputo = new();
+    private List<TendenciaPeriodo> _tendenciaAlumno = new();
+    private List<FilaHistorial> _filas = new();
+
+    private List<string> _etiquetasGlobales = new();
+    private List<double> _serieSimGlobal = new();
+    private List<double> _serieIaGlobal = new();
+    private List<string> _etiquetasAlumno = new();
+    private List<double> _serieSimAlumno = new();
+    private List<double> _serieIaAlumno = new();
+
+    private IEnumerable<AlumnoOpcion> AlumnosFiltrados
+    {
+        get
+        {
+            var texto = (_busqueda ?? string.Empty).Trim();
+            var consulta = _alumnos.AsEnumerable();
+            if (texto.Length > 0)
+            {
+                consulta = consulta.Where(a =>
+                    a.Nombre.Contains(texto, StringComparison.OrdinalIgnoreCase) ||
+                    a.Carnet.Contains(texto, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return consulta.OrderBy(a => a.Nombre).Take(400);
+        }
+    }
+
+    private string EtiquetaAlumnoSeleccionado
+    {
+        get
+        {
+            var alumno = _alumnos.FirstOrDefault(a => string.Equals(a.Carnet, _carnetSeleccionado, StringComparison.OrdinalIgnoreCase));
+            return alumno is null ? _carnetSeleccionado : Prefs.NombreVisible(alumno.EstudianteId, alumno.Nombre);
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        Prefs.Cambio += AlCambiarPreferencias;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarCatalogosAsync();
+        await RecargarAsync();
+    }
+
+    private async Task CargarCatalogosAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var grupos = await db.Grupos
+                .AsNoTracking()
+                .Select(g => new { g.Ciclo, g.Anio })
+                .ToListAsync();
+
+            _ciclos = grupos.Select(g => g.Ciclo).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(c => c).ToList();
+            _anios = grupos.Select(g => g.Anio).Distinct().OrderByDescending(a => a).ToList();
+
+            var estudiantes = await db.Estudiantes
+                .AsNoTracking()
+                .Select(e => new { e.Id, e.Carnet, e.Nombre })
+                .ToListAsync();
+
+            _alumnos = estudiantes
+                .GroupBy(e => e.Carnet, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new AlumnoOpcion
+                {
+                    Carnet = g.Key,
+                    Nombre = g.OrderByDescending(e => e.Id).First().Nombre,
+                    EstudianteId = g.OrderByDescending(e => e.Id).First().Id
+                })
+                .OrderBy(a => a.Nombre)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando catálogos del histórico");
+            _error = $"No se pudieron cargar los filtros: {ex.Message}";
+        }
+    }
+
+    private async Task RecargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var consulta = db.Historiales.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(_filtroCiclo))
+            {
+                consulta = consulta.Where(h => h.Ciclo == _filtroCiclo);
+            }
+
+            if (_filtroAnio > 0)
+            {
+                consulta = consulta.Where(h => h.Anio == _filtroAnio);
+            }
+
+            if (_filtroComputo is >= 1 and <= 3)
+            {
+                consulta = consulta.Where(h => h.Computo == _filtroComputo);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_carnetSeleccionado))
+            {
+                consulta = consulta.Where(h => h.Estudiante != null && h.Estudiante.Carnet == _carnetSeleccionado);
+            }
+
+            _totalRegistros = await consulta.CountAsync();
+            _promedioSim = await consulta.Select(h => (double?)h.Similitud).AverageAsync() ?? 0;
+            _promedioIa = await consulta.Select(h => (double?)h.ProbabilidadIA).AverageAsync() ?? 0;
+            _totalEstudiantes = await consulta
+                .Where(h => h.Estudiante != null)
+                .Select(h => h.Estudiante!.Carnet)
+                .Distinct()
+                .CountAsync();
+
+            _globalPorComputo = await consulta
+                .GroupBy(h => h.Computo)
+                .Select(g => new ComputoGlobal
+                {
+                    Computo = g.Key,
+                    Total = g.Count(),
+                    Similitud = g.Average(h => h.Similitud),
+                    IA = g.Average(h => h.ProbabilidadIA)
+                })
+                .OrderBy(c => c.Computo)
+                .ToListAsync();
+
+            _etiquetasGlobales = _globalPorComputo.Select(c => $"C{c.Computo}").ToList();
+            _serieSimGlobal = _globalPorComputo.Select(c => c.Similitud).ToList();
+            _serieIaGlobal = _globalPorComputo.Select(c => c.IA).ToList();
+
+            _tendenciaAlumno = new List<TendenciaPeriodo>();
+            _etiquetasAlumno = new List<string>();
+            _serieSimAlumno = new List<double>();
+            _serieIaAlumno = new List<double>();
+
+            if (!string.IsNullOrWhiteSpace(_carnetSeleccionado))
+            {
+                var tendencia = await consulta
+                    .GroupBy(h => new { h.Anio, h.Ciclo, h.Computo })
+                    .Select(g => new
+                    {
+                        g.Key.Anio,
+                        g.Key.Ciclo,
+                        g.Key.Computo,
+                        Total = g.Count(),
+                        Similitud = g.Average(h => h.Similitud),
+                        IA = g.Average(h => h.ProbabilidadIA)
+                    })
+                    .OrderBy(x => x.Anio)
+                    .ThenBy(x => x.Ciclo)
+                    .ThenBy(x => x.Computo)
+                    .ToListAsync();
+
+                var multiplesAnios = tendencia.Select(x => x.Anio).Distinct().Count() > 1;
+                _tendenciaAlumno = tendencia
+                    .Select(x => new TendenciaPeriodo
+                    {
+                        Etiqueta = multiplesAnios ? $"C{x.Computo} · {x.Anio}" : $"C{x.Computo}",
+                        Anio = x.Anio,
+                        Ciclo = x.Ciclo,
+                        Total = x.Total,
+                        Similitud = x.Similitud,
+                        IA = x.IA
+                    })
+                    .ToList();
+
+                _etiquetasAlumno = _tendenciaAlumno.Select(t => t.Etiqueta).ToList();
+                _serieSimAlumno = _tendenciaAlumno.Select(t => t.Similitud).ToList();
+                _serieIaAlumno = _tendenciaAlumno.Select(t => t.IA).ToList();
+            }
+
+            _filas = await consulta
+                .OrderByDescending(h => h.Fecha)
+                .ThenByDescending(h => h.Id)
+                .Take(100)
+                .Select(h => new FilaHistorial
+                {
+                    Id = h.Id,
+                    EvaluacionId = h.EvaluacionId,
+                    EstudianteId = h.EstudianteId,
+                    EstudianteNombre = h.Estudiante != null ? h.Estudiante.Nombre : "Sin estudiante",
+                    EstudianteCarnet = h.Estudiante != null ? h.Estudiante.Carnet : string.Empty,
+                    GrupoNombre = h.Grupo != null ? h.Grupo.Nombre : string.Empty,
+                    Computo = h.Computo,
+                    Anio = h.Anio,
+                    Ciclo = h.Ciclo,
+                    Similitud = h.Similitud,
+                    ProbabilidadIA = h.ProbabilidadIA,
+                    Origen = h.Origen,
+                    Fecha = h.Fecha
+                })
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando el histórico");
+            _error = $"No se pudo cargar el histórico: {ex.Message}";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task LimpiarFiltrosAsync()
+    {
+        _busqueda = string.Empty;
+        _carnetSeleccionado = string.Empty;
+        _filtroCiclo = string.Empty;
+        _filtroAnio = 0;
+        _filtroComputo = 0;
+        await RecargarAsync();
+    }
+
+    private string EtiquetaAlumno(AlumnoOpcion alumno)
+        => $"{Prefs.NombreVisible(alumno.EstudianteId, alumno.Nombre)} · {Prefs.CarnetVisible(alumno.EstudianteId, alumno.Carnet)}";
+
+    private static string ClaseSimilitud(double valor)
+        => valor >= 80 ? "danger" : valor >= 60 ? "warn" : valor >= 35 ? "info" : "ok";
+
+    private void AlCambiarPreferencias() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Prefs.Cambio -= AlCambiarPreferencias;
+
+    private sealed class AlumnoOpcion
+    {
+        public int EstudianteId { get; set; }
+        public string Carnet { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+    }
+
+    private sealed class ComputoGlobal
+    {
+        public int Computo { get; set; }
+        public int Total { get; set; }
+        public double Similitud { get; set; }
+        public double IA { get; set; }
+    }
+
+    private sealed class TendenciaPeriodo
+    {
+        public string Etiqueta { get; set; } = string.Empty;
+        public int Anio { get; set; }
+        public string Ciclo { get; set; } = string.Empty;
+        public int Total { get; set; }
+        public double Similitud { get; set; }
+        public double IA { get; set; }
+    }
+
+    private sealed class FilaHistorial
+    {
+        public int Id { get; set; }
+        public int EvaluacionId { get; set; }
+        public int EstudianteId { get; set; }
+        public string EstudianteNombre { get; set; } = string.Empty;
+        public string EstudianteCarnet { get; set; } = string.Empty;
+        public string GrupoNombre { get; set; } = string.Empty;
+        public int Computo { get; set; }
+        public int Anio { get; set; }
+        public string Ciclo { get; set; } = string.Empty;
+        public double Similitud { get; set; }
+        public double ProbabilidadIA { get; set; }
+        public string Origen { get; set; } = string.Empty;
+        public DateTime Fecha { get; set; }
+    }
+}

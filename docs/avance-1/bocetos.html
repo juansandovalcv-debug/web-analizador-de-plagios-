@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Avance 1 · Bocetos y lógica de pantallas</title>
+<style>
+  :root {
+    --ink: #101828;
+    --muted: #667085;
+    --line: #d0d5dd;
+    --soft: #f2f4f7;
+    --paper: #ffffff;
+    --bg: #e9edf3;
+    --accent: #2563eb;
+    --accent-soft: #eff4ff;
+    --ok: #067647;
+    --ok-soft: #ecfdf3;
+    --warn: #b42318;
+    --warn-soft: #fef3f2;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+  .page {
+    width: 210mm;
+    height: 297mm;
+    margin: 8mm auto;
+    padding: 14mm 15mm 12mm;
+    background: var(--paper);
+    box-shadow: 0 8px 30px rgba(16, 24, 40, .12);
+    position: relative;
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+  }
+  .page:last-child { page-break-after: auto; }
+  .kicker {
+    font-size: 7.5pt;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4mm;
+  }
+  h1, h2, h3, p { margin-top: 0; }
+  h1 { font-size: 25pt; line-height: 1.1; letter-spacing: -.02em; margin-bottom: 4mm; }
+  h2 { font-size: 17pt; line-height: 1.15; letter-spacing: -.01em; margin-bottom: 2mm; }
+  h3 { font-size: 10pt; margin-bottom: 1.5mm; }
+  p { color: var(--muted); }
+  .lead { font-size: 11pt; max-width: 165mm; }
+  .rule { height: 1px; background: var(--line); margin: 6mm 0; }
+  .badge {
+    display: inline-block;
+    padding: 1.2mm 2.4mm;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .cover { display: flex; flex-direction: column; justify-content: space-between; }
+  .cover-top { margin-top: 12mm; }
+  .cover h1 { font-size: 29pt; max-width: 165mm; }
+  .cover .subtitle { font-size: 13pt; color: var(--muted); max-width: 150mm; margin-bottom: 8mm; }
+  .cover-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; margin: 8mm 0; }
+  .meta-card { border: 1px solid var(--line); border-radius: 3mm; padding: 4mm; }
+  .meta-card strong { display: block; font-size: 8pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 1.5mm; }
+  .meta-card span { font-size: 10pt; }
+  .map {
+    border: 1px solid var(--line);
+    border-radius: 3mm;
+    padding: 6mm;
+    background: #fbfcfe;
+  }
+  .map-row { display: flex; align-items: center; gap: 2.5mm; flex-wrap: wrap; margin-bottom: 3mm; }
+  .node {
+    border: 1.4px solid #98a2b3;
+    background: #fff;
+    border-radius: 2mm;
+    padding: 2.4mm 3.2mm;
+    font-size: 8.5pt;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .node.start { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .arrow { color: #98a2b3; font-size: 12pt; }
+  .map-note { font-size: 8pt; color: var(--muted); margin: 0; }
+  .screen-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6mm; margin-bottom: 4mm; flex: 0 0 auto; }
+  .screen-head p { margin: 0; max-width: 125mm; font-size: 9pt; }
+  .screen-num { font-size: 8pt; color: var(--muted); font-weight: 700; letter-spacing: .08em; }
+  .wire {
+    border: 1px solid var(--line);
+    border-radius: 2.5mm;
+    overflow: hidden;
+    background: #f8fafc;
+    margin-bottom: 4mm;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .browser {
+    display: flex;
+    align-items: center;
+    gap: 2mm;
+    background: #e4e7ec;
+    border-bottom: 1px solid var(--line);
+    padding: 2mm 3mm;
+  }
+  .dots { display: flex; gap: 1.2mm; }
+  .dots i { width: 2.2mm; height: 2.2mm; border-radius: 50%; background: #98a2b3; display: block; }
+  .url {
+    flex: 1;
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 999px;
+    padding: .6mm 3mm;
+    font-size: 6.8pt;
+    color: #667085;
+    font-family: Consolas, monospace;
+  }
+  .app { display: grid; grid-template-columns: 31mm 1fr; flex: 1 1 auto; min-height: 0; }
+  .side {
+    background: #1d2939;
+    color: #d0d5dd;
+    padding: 3mm 2.5mm;
+    display: flex;
+    flex-direction: column;
+    gap: 2mm;
+  }
+  .brand { color: #fff; font-weight: 700; font-size: 8pt; line-height: 1.1; margin-bottom: 2mm; }
+  .brand small { display: block; font-size: 5.5pt; font-weight: 400; color: #98a2b3; letter-spacing: .08em; margin-top: 1mm; }
+  .nav-item {
+    font-size: 6.8pt;
+    color: #d0d5dd;
+    padding: 1.3mm 1.8mm;
+    border-radius: 1.2mm;
+  }
+  .nav-item.active { background: rgba(37, 99, 235, .35); color: #fff; }
+  .side-foot { margin-top: auto; font-size: 5.5pt; color: #98a2b3; border-top: 1px solid #344054; padding-top: 2mm; }
+  .main { padding: 2.5mm 3mm; display: flex; flex-direction: column; min-height: 0; }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2mm;
+    border-bottom: 1px solid #e4e7ec;
+    padding-bottom: 2mm;
+    margin-bottom: 3mm;
+  }
+  .topbar .where { font-size: 6.5pt; color: #667085; }
+  .topbar .actions { display: flex; gap: 1.5mm; }
+  .pill {
+    border: 1px solid #d0d5dd;
+    background: #fff;
+    border-radius: 999px;
+    padding: .8mm 2mm;
+    font-size: 6pt;
+    color: #475467;
+    white-space: nowrap;
+  }
+  .content { display: flex; flex-direction: column; gap: 2mm; flex: 1 1 auto; min-height: 0; }
+  .content > .row { flex: 1 1 auto; }
+  .content > .box { flex: 1 1 auto; }
+  .row { display: flex; gap: 2mm; }
+  .col { display: flex; flex-direction: column; gap: 2mm; flex: 1; }
+  .box {
+    border: 1px solid #d0d5dd;
+    background: #fff;
+    border-radius: 1.5mm;
+    padding: 2mm;
+    min-height: 8mm;
+  }
+  .box.soft { background: #f9fafb; border-style: dashed; }
+  .box.accent { background: #eff4ff; border-color: #b2ccff; }
+  .box.dark { background: #1d2939; border-color: #1d2939; }
+  .label { font-size: 6.2pt; color: #667085; text-transform: uppercase; letter-spacing: .07em; font-weight: 700; margin-bottom: 1mm; }
+  .value { font-size: 11pt; font-weight: 700; }
+  .value.small { font-size: 8pt; }
+  .line { height: 1.6mm; background: #eaecf0; border-radius: 1mm; margin: 1.2mm 0; }
+  .line.w40 { width: 40%; } .line.w60 { width: 60%; } .line.w80 { width: 80%; }
+  .btn-wire {
+    display: inline-block;
+    border: 1px solid #98a2b3;
+    border-radius: 1.2mm;
+    padding: 1mm 2mm;
+    font-size: 6.5pt;
+    font-weight: 600;
+    color: #344054;
+    background: #fff;
+  }
+  .btn-wire.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-wire.danger { background: #fff; border-color: #fda29b; color: #b42318; }
+  .chips { display: flex; gap: 1.2mm; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid #d0d5dd;
+    border-radius: 999px;
+    padding: .7mm 1.8mm;
+    font-size: 6pt;
+    background: #fff;
+    color: #475467;
+  }
+  .chip.on { background: #eff4ff; border-color: #b2ccff; color: #175cd3; }
+  table.wtable { width: 100%; border-collapse: collapse; font-size: 6.2pt; }
+  table.wtable th {
+    text-align: left;
+    font-size: 5.6pt;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #667085;
+    border-bottom: 1px solid #d0d5dd;
+    padding: 1.2mm 1mm;
+    background: #f9fafb;
+  }
+  table.wtable td { border-bottom: 1px solid #eaecf0; padding: 1.2mm 1mm; color: #344054; }
+  .tag { display: inline-block; border-radius: 999px; padding: .4mm 1.4mm; font-size: 5.4pt; font-weight: 700; }
+  .tag.ok { background: var(--ok-soft); color: var(--ok); }
+  .tag.high { background: var(--warn-soft); color: var(--warn); }
+  .tag.mid { background: #fffaeb; color: #b54708; }
+  .drop {
+    border: 1.5px dashed #98a2b3;
+    border-radius: 2mm;
+    min-height: 19mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 6.5pt;
+    color: #667085;
+    background: #fcfcfd;
+    padding: 2mm;
+  }
+  .drop strong { display: block; color: #344054; font-size: 7pt; margin-bottom: .8mm; }
+  .tabs { display: flex; gap: 1mm; border-bottom: 1px solid #d0d5dd; margin-bottom: 2mm; }
+  .tab { font-size: 6.2pt; padding: 1.2mm 2mm; color: #667085; border-bottom: 1.5px solid transparent; }
+  .tab.active { color: #175cd3; border-color: #2563eb; font-weight: 700; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 2mm; }
+  .code-line { font-family: Consolas, monospace; font-size: 5.4pt; color: #475467; padding: .3mm 1mm; border-radius: .5mm; }
+  .code-line.add { background: #ecfdf3; }
+  .code-line.del { background: #fef3f2; }
+  .notes { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm 7mm; flex: 0 0 auto; margin-top: 1mm; }
+  .notes h3 { display: flex; align-items: center; gap: 1.5mm; font-size: 8.5pt; }
+  .notes h3::before { content: ""; width: 2mm; height: 2mm; background: var(--accent); border-radius: 50%; display: inline-block; }
+  .notes ul { margin: 0; padding-left: 4.2mm; }
+  .notes li { font-size: 8.2pt; color: #475467; margin-bottom: 1mm; }
+  .callout {
+    border-left: 2.5px solid var(--accent);
+    background: #f8fafc;
+    padding: 2.4mm 3mm;
+    font-size: 8pt;
+    color: #475467;
+    border-radius: 0 1.5mm 1.5mm 0;
+  }
+  .footer {
+    position: absolute;
+    left: 15mm;
+    right: 15mm;
+    bottom: 8mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 6.5pt;
+    color: #98a2b3;
+    border-top: 1px solid #eaecf0;
+    padding-top: 2mm;
+  }
+  .legend { display: flex; gap: 4mm; flex-wrap: wrap; font-size: 7.5pt; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 1.5mm; }
+  .legend i { display: inline-block; width: 3mm; height: 3mm; border-radius: .6mm; }
+  @media print {
+    html, body { background: #fff; }
+    .page { margin: 0; box-shadow: none; }
+    @page { size: A4; margin: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ PORTADA / MAPA ============ -->
+<section class="page cover">
+  <div class="cover-top">
+    <div class="kicker">Avance 1 · Documento de trabajo</div>
+    <h1>Analizador de Plagios para Entregas de Código C#</h1>
+    <p class="subtitle">Bocetos de pantallas y lógica de navegación de una aplicación web local-first.</p>
+    <span class="badge">Versión preliminar · Bocetos de baja fidelidad</span>
+  </div>
+
+  <div class="cover-meta">
+    <div class="meta-card"><strong>Propósito</strong><span>Validar el flujo y la lógica antes de la captura final.</span></div>
+    <div class="meta-card"><strong>Pantallas</strong><span>7 vistas principales del recorrido académico.</span></div>
+    <div class="meta-card"><strong>Alcance</strong><span>Grupos, análisis, resultados, defensa e histórico.</span></div>
+  </div>
+
+  <div class="map">
+    <div class="label" style="margin-bottom:3mm">Mapa de navegación</div>
+    <div class="map-row">
+      <span class="node start">Inicio / Panel</span><span class="arrow">→</span>
+      <span class="node">Grupos y estudiantes</span><span class="arrow">→</span>
+      <span class="node">Importar CSV</span><span class="arrow">→</span>
+      <span class="node">Analizar entrega</span>
+    </div>
+    <div class="map-row" style="padding-left:20mm">
+      <span class="arrow">↳</span>
+      <span class="node">Resultados</span><span class="arrow">→</span>
+      <span class="node">Detalle del resultado</span><span class="arrow">→</span>
+      <span class="node">Histórico y tendencias</span>
+    </div>
+    <p class="map-note">La barra lateral permanece visible. El modo a ciegas y el tema claro/oscuro se controlan desde la barra superior y se conservan entre sesiones.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Nota de alcance:</strong> estos bocetos ordenan la lógica de la interfaz. El PDF final utilizará capturas de la aplicación real con datos de demostración para que el diseño se valore con su acabado definitivo.
+  </div>
+
+  <div class="footer"><span>Analizador de Plagios C# · Avance 1</span><span>Bocetos · 1 / 8</span></div>
+</section>
+
+<!-- ============ 1. INICIO ============ -->
+<section class="page">
+  <div class="screen-head">
+    <div>
+      <div class="screen-num">PANTALLA 01</div>
+      <h2>Inicio · Panel general</h2>
+      <p>Resumen del estado académico y punto de entrada a los flujos principales.</p>
+    </div>
+    <span class="badge">Dashboard</span>
+  </div>
+
+  <div class="wire">
+    <div class="browser"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:5135/</div></div>
+    <div class="app">
+      <aside class="side">
+        <div class="brand">Analizador<small>DE PLAGIOS</small></div>
+        <div class="nav-item active">Inicio</div>
+        <div class="nav-item">Grupos</div>
+        <div class="nav-item">Analizar</div>
+        <div class="nav-item">Resultados</div>
+        <div class="nav-item">Histórico</div>
+        <div class="side-foot">Los datos no salen de este equipo.</div>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span class="where">PANEL GENERAL</span><div class="actions"><span class="pill">Modo a ciegas</span><span class="pill">Tema</span></div></div>
+        <div class="content">
+          <div class="row">
+            <div class="box accent" style="flex:2">
+              <div class="label">Bienvenida</div>
+              <div class="value" style="margin-bottom:1.5mm">De la similitud a una decisión fundamentada.</div>
+              <div class="line w80"></div><div class="line w60"></div>
+              <div style="margin-top:2mm"><span class="btn-wire primary">Cargar y comparar</span> <span class="btn-wire">Importar estudiantes</span></div>
+            </div>
+            <div class="box soft" style="flex:1">
+              <div class="label">Primer paso</div>
+              <div class="line w80"></div><div class="line w60"></div>
+              <div style="margin-top:2mm"><span class="btn-wire">Crear grupo</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="box"><div class="label">Grupos activos</div><div class="value">0</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Entregas analizadas</div><div class="value">0</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Alertas altas</div><div class="value">0</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Cobertura de defensa</div><div class="value">0 / 0</div><div class="line w60"></div></div>
+          </div>
+          <div class="row">
+            <div class="box" style="flex:2">
+              <div class="label">Actividad reciente</div>
+              <table class="wtable"><tr><th>Estudiante</th><th>Entrega</th><th>Sim.</th><th>IA</th></tr>
+              <tr><td>—</td><td>Aún no hay entregas</td><td>—</td><td>—</td></tr></table>
+            </div>
+            <div class="box" style="flex:1"><div class="label">Distribución por cómputo</div><div class="line"></div><div class="line w80"></div><div class="line w60"></div><div class="line w40"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>Objetivo</h3>
+      <ul>
+        <li>Mostrar el estado general sin obligar a navegar.</li>
+        <li>Ofrecer accesos directos a grupo, análisis y resultados.</li>
+        <li>Hacer visible que todo se procesa localmente.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>Los contadores se calculan desde la base local al cargar.</li>
+        <li>Sin datos: estado vacío con llamada a crear grupo.</li>
+        <li>El modo a ciegas oculta nombres en actividad reciente.</li>
+        <li>Las alertas consideran similitud o IA ≥ 60 %.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>Inicio</span><span>Bocetos · 2 / 8</span></div>
+</section>
+
+<!-- ============ 2. GRUPOS ============ -->
+<section class="page">
+  <div class="screen-head">
+    <div>
+      <div class="screen-num">PANTALLA 02</div>
+      <h2>Grupos y estudiantes</h2>
+      <p>Organización por ciclo, año y cómputo, con la lista y el historial de cada grupo.</p>
+    </div>
+    <span class="badge">Organización</span>
+  </div>
+
+  <div class="wire">
+    <div class="browser"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:5135/grupos</div></div>
+    <div class="app">
+      <aside class="side">
+        <div class="brand">Analizador<small>DE PLAGIOS</small></div>
+        <div class="nav-item">Inicio</div>
+        <div class="nav-item active">Grupos</div>
+        <div class="nav-item">Analizar</div>
+        <div class="nav-item">Resultados</div>
+        <div class="nav-item">Histórico</div>
+        <div class="side-foot">Base local · SQLite</div>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span class="where">ORGANIZACIÓN ACADÉMICA</span><div class="actions"><span class="pill">Importar respaldo</span><span class="pill">Nuevo grupo</span></div></div>
+        <div class="content">
+          <div class="row">
+            <div class="box" style="flex:2"><div class="label">Buscar</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Cómputo</div><div class="chips"><span class="chip on">Todos</span><span class="chip">C1</span><span class="chip">C2</span><span class="chip">C3</span></div></div>
+            <div class="box"><div class="label">Ciclo / Año</div><div class="chips"><span class="chip on">2026</span><span class="chip">Todos</span></div></div>
+          </div>
+          <div class="box">
+            <div class="row" style="align-items:center">
+              <div class="col"><div class="value small">IS · Programación I · 2026</div><div class="label" style="margin:0">IS-2026-C1 · 2026 · Cómputo 1</div></div>
+              <div class="col" style="max-width:30mm"><div class="label">Estudiantes</div><div class="value small">5</div></div>
+              <div class="col" style="max-width:24mm"><div class="label">Entregas</div><div class="value small">5</div></div>
+              <div class="col" style="max-width:24mm"><div class="label">Sim. / IA</div><div class="value small">65 % · 10 %</div></div>
+              <div style="display:flex;gap:1mm"><span class="btn-wire">Ocultar</span><span class="btn-wire">Editar</span><span class="btn-wire danger">Eliminar</span></div>
+            </div>
+          </div>
+          <div class="box" style="padding:0;overflow:hidden">
+            <div style="padding:2mm;display:flex;justify-content:space-between;align-items:center"><div class="label" style="margin:0">Lista de estudiantes</div><div><span class="btn-wire">Estudiante</span> <span class="btn-wire">Importar CSV</span> <span class="btn-wire">Plantilla</span></div></div>
+            <table class="wtable"><tr><th>Estudiante</th><th>Carnet</th><th>Correo</th><th>Entregas</th><th>Promedio</th><th></th></tr>
+            <tr><td>Ana Pérez</td><td>20240001</td><td>ana@ejemplo.com</td><td>1</td><td>Sim. 61 % · IA 10 %</td><td>⋯</td></tr>
+            <tr><td>Luis Gómez</td><td>20240002</td><td>luis@ejemplo.com</td><td>1</td><td>Sim. 61 % · IA 14 %</td><td>⋯</td></tr>
+            <tr><td>María Rodríguez</td><td>20240003</td><td>maria@ejemplo.com</td><td>1</td><td>Sim. 100 % · IA 10 %</td><td>⋯</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>Objetivo</h3>
+      <ul>
+        <li>Crear un grupo por periodo y mantener su propia lista.</li>
+        <li>Editar, eliminar, respaldar e importar estudiantes.</li>
+        <li>Comparar promedios sin mezclar cómputos.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>El grupo se identifica por código + año + ciclo + cómputo.</li>
+        <li>El carnet es único dentro del grupo, no global.</li>
+        <li>Eliminar exige confirmación y borra estudiantes, entregas e historial.</li>
+        <li>El modo a ciegas oculta la lista de estudiantes.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>Grupos y estudiantes</span><span>Bocetos · 3 / 8</span></div>
+</section>
+
+<!-- ============ 3. CSV ============ -->
+<section class="page">
+  <div class="screen-head">
+    <div>
+      <div class="screen-num">PANTALLA 03</div>
+      <h2>Importación masiva de estudiantes</h2>
+      <p>Vista previa y validación antes de escribir en la base local.</p>
+    </div>
+    <span class="badge">CSV</span>
+  </div>
+
+  <div class="wire">
+    <div class="browser"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:5135/grupos · Importar CSV</div></div>
+    <div class="app">
+      <aside class="side">
+        <div class="brand">Analizador<small>DE PLAGIOS</small></div>
+        <div class="nav-item">Inicio</div>
+        <div class="nav-item active">Grupos</div>
+        <div class="nav-item">Analizar</div>
+        <div class="nav-item">Resultados</div>
+        <div class="nav-item">Histórico</div>
+        <div class="side-foot">Validación previa</div>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span class="where">IMPORTACIÓN MASIVA</span><div class="actions"><span class="pill">Cerrar</span></div></div>
+        <div class="content">
+          <div class="box soft">
+            <div class="label">Archivo CSV</div>
+            <div class="drop"><div><strong>Arrastrar o seleccionar archivo</strong>.csv o .txt · encabezados carnet, nombre, correo</div></div>
+            <div style="display:flex;gap:1.5mm;margin-top:2mm;align-items:center"><span class="btn-wire">Seleccionar archivo</span><span class="btn-wire primary">Previsualizar</span></div>
+          </div>
+          <div class="row">
+            <div class="box" style="flex:1"><div class="label">Contenido CSV</div><div class="line w80"></div><div class="line"></div><div class="line w60"></div><div class="line w80"></div><div class="line w40"></div></div>
+            <div class="box" style="flex:1.4">
+              <div class="label">Vista previa · 5 filas</div>
+              <table class="wtable"><tr><th>Línea</th><th>Carnet</th><th>Nombre</th><th>Estado</th></tr>
+              <tr><td>2</td><td>20240001</td><td>Ana Duplicada</td><td><span class="tag high">Inválida</span> Ya registrado</td></tr>
+              <tr><td>3</td><td>X</td><td>AB</td><td><span class="tag high">Inválida</span> Carnet corto</td></tr>
+              <tr><td>4</td><td>20240009</td><td>Carlos Ruiz</td><td><span class="tag ok">Válida</span></td></tr>
+              <tr><td>5</td><td>20240009</td><td>Carlos Otra Vez</td><td><span class="tag high">Inválida</span> Duplicado</td></tr>
+              <tr><td>6</td><td>20240010</td><td>Daniela Soto</td><td><span class="tag ok">Válida</span></td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="callout">Solo se importan las filas válidas. Las inválidas se informan por número de línea y motivo, sin abortar el resto del lote.</div>
+          <div style="display:flex;gap:1.5mm;justify-content:flex-end"><span class="btn-wire">Cerrar</span><span class="btn-wire primary">Importar estudiantes válidos</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>Objetivo</h3>
+      <ul>
+        <li>Importar listas completas sin capturar estudiante por estudiante.</li>
+        <li>Evitar duplicados y datos incompletos antes de guardar.</li>
+        <li>Permitir pegar el CSV o seleccionar un archivo.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>Carnet y nombre: mínimo 2 caracteres.</li>
+        <li>Detecta duplicados dentro del archivo y contra el grupo.</li>
+        <li>Acepta coma, punto y coma o tabulador.</li>
+        <li>Muestra el resultado: importados y omitidos con su motivo.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>Importación CSV</span><span>Bocetos · 4 / 8</span></div>
+</section>
+
+<!-- ============ 4. ANALIZAR ============ -->
+<section class="page">
+  <div class="screen-head">
+    <div>
+      <div class="screen-num">PANTALLA 04</div>
+      <h2>Analizar una entrega</h2>
+      <p>Carga de archivos, selección del estudiante y modo de comparación.</p>
+    </div>
+    <span class="badge">Motor</span>
+  </div>
+
+  <div class="wire">
+    <div class="browser"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:5135/analisis</div></div>
+    <div class="app">
+      <aside class="side">
+        <div class="brand">Analizador<small>DE PLAGIOS</small></div>
+        <div class="nav-item">Inicio</div>
+        <div class="nav-item">Grupos</div>
+        <div class="nav-item active">Analizar</div>
+        <div class="nav-item">Resultados</div>
+        <div class="nav-item">Histórico</div>
+        <div class="side-foot">Procesamiento local</div>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span class="where">MOTOR DE COMPARACIÓN</span><div class="actions"><span class="pill">Limpiar</span><span class="pill">Gestionar grupos</span></div></div>
+        <div class="content">
+          <div class="row">
+            <div class="box"><div class="label">Grupo</div><div class="line w80"></div></div>
+            <div class="box"><div class="label">Estudiante A</div><div class="line w80"></div></div>
+            <div class="box"><div class="label">Estudiante B / referencia</div><div class="line w80"></div></div>
+          </div>
+          <div class="row">
+            <div class="box" style="flex:1"><div class="label">Entrega A</div><div class="drop"><div><strong>Arrastrar .cs</strong>o seleccionar archivo</div></div><div class="line w60" style="margin-top:2mm"></div></div>
+            <div class="box" style="flex:1"><div class="label">Entrega B</div><div class="drop"><div><strong>Arrastrar .cs</strong>o comparar contra el corpus</div></div><div class="line w60" style="margin-top:2mm"></div></div>
+          </div>
+          <div class="row">
+            <div class="box" style="flex:1"><div class="label">Modo</div><div class="chips"><span class="chip on">Dos archivos</span><span class="chip">Todo el corpus</span></div></div>
+            <div class="box" style="flex:1"><div class="label">Opciones</div><div class="chips"><span class="chip on">Guardar en historial</span><span class="chip">Aplicar OCR</span></div></div>
+            <div class="box" style="flex:1;display:flex;align-items:flex-end;justify-content:flex-end"><span class="btn-wire primary">Analizar entregas</span></div>
+          </div>
+          <div class="callout">Formatos admitidos: .cs para código y capturas para OCR. Los nombres se sanean y los archivos se guardan con nombre GUID dentro de App_Data/uploads/año-mes.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>Objetivo</h3>
+      <ul>
+        <li>Asociar una entrega a un estudiante y un grupo.</li>
+        <li>Elegir comparación directa o contra todo el corpus.</li>
+        <li>Guardar el resultado para consulta y tendencias.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>Exige grupo, estudiante y al menos un archivo válido.</li>
+        <li>Rechaza extensiones no admitidas y archivos vacíos o gigantes.</li>
+        <li>El análisis es asíncrono y muestra progreso y errores visibles.</li>
+        <li>Sin grupo creado, ofrece ir a Grupos.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>Analizar entrega</span><span>Bocetos · 5 / 8</span></div>
+</section>
+
+<!-- ============ 5. RESULTADOS ============ -->
+<section class="page">
+  <div class="screen-head">
+    <div>
+      <div class="screen-num">PANTALLA 05</div>
+      <h2>Resultados de análisis</h2>
+      <p>Búsqueda, filtros y lectura rápida del riesgo de cada entrega.</p>
+    </div>
+    <span class="badge">Trazabilidad</span>
+  </div>
+
+  <div class="wire">
+    <div class="browser"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:5135/resultados</div></div>
+    <div class="app">
+      <aside class="side">
+        <div class="brand">Analizador<small>DE PLAGIOS</small></div>
+        <div class="nav-item">Inicio</div>
+        <div class="nav-item">Grupos</div>
+        <div class="nav-item">Analizar</div>
+        <div class="nav-item active">Resultados</div>
+        <div class="nav-item">Histórico</div>
+        <div class="side-foot">Evidencia y trazabilidad</div>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span class="where">RESULTADOS</span><div class="actions"><span class="pill">Exportar CSV</span><span class="pill">Nuevo análisis</span></div></div>
+        <div class="content">
+          <div class="row">
+            <div class="box"><div class="label">Entregas</div><div class="value">5</div></div>
+            <div class="box"><div class="label">Similitud media</div><div class="value">65.3 %</div></div>
+            <div class="box"><div class="label">IA media</div><div class="value">9.6 %</div></div>
+            <div class="box"><div class="label">Alertas altas</div><div class="value">4</div></div>
+          </div>
+          <div class="row">
+            <div class="box" style="flex:2"><div class="label">Buscar</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Grupo</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Cómputo</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Nivel</div><div class="chips"><span class="chip on">Todos</span><span class="chip">Crítico</span><span class="chip">Alto</span></div></div>
+          </div>
+          <div class="box" style="padding:0;overflow:hidden">
+            <table class="wtable"><tr><th>Estudiante</th><th>Entrega</th><th>Similitud</th><th>IA</th><th>Nivel</th><th>Fecha</th><th></th></tr>
+            <tr><td>José Pérez<br>20240005</td><td>Igual_Jose.cs</td><td>100.0 %</td><td>10.0 %</td><td><span class="tag high">Crítico</span></td><td>25/10/26</td><td>Abrir</td></tr>
+            <tr><td>María Rodríguez<br>20240003</td><td>Igual_Maria.cs</td><td>100.0 %</td><td>10.0 %</td><td><span class="tag high">Crítico</span></td><td>25/10/26</td><td>Abrir</td></tr>
+            <tr><td>Luis Gómez<br>20240002</td><td>ProgramaLuis.cs</td><td>61.4 %</td><td>14.0 %</td><td><span class="tag mid">Alto</span></td><td>25/10/26</td><td>Abrir</td></tr>
+            <tr><td>Carmen Díaz<br>20240004</td><td>captura.png</td><td>3.5 %</td><td>4.0 %</td><td><span class="tag ok">Bajo</span></td><td>25/10/26</td><td>Abrir</td></tr>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center"><span class="label" style="margin:0">Mostrando 1–5 de 5</span><div class="chips"><span class="chip">Anterior</span><span class="chip">Siguiente</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>Objetivo</h3>
+      <ul>
+        <li>Localizar una entrega por estudiante, carnet, archivo o grupo.</li>
+        <li>Priorizar revisión según similitud, IA y nivel de riesgo.</li>
+        <li>Exportar la vista filtrada a CSV.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>Filtros combinables por grupo, cómputo y nivel.</li>
+        <li>Paginación y contador de resultados.</li>
+        <li>Modo a ciegas sustituye nombre y carnet por etiquetas.</li>
+        <li>Sin coincidencias: estado vacío con acceso a Analizar.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>Resultados</span><span>Bocetos · 6 / 8</span></div>
+</section>
+
+<!-- ============ 6. DETALLE ============ -->
+<section class="page">
+  <div class="screen-head">
+    <div>
+      <div class="screen-num">PANTALLA 06</div>
+      <h2>Detalle del resultado</h2>
+      <p>Evidencia para sustentar la revisión: métricas, diff, señales de IA, metadatos y defensa.</p>
+    </div>
+    <span class="badge">Evidencia</span>
+  </div>
+
+  <div class="wire">
+    <div class="browser"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:5135/resultados/7</div></div>
+    <div class="app">
+      <aside class="side">
+        <div class="brand">Analizador<small>DE PLAGIOS</small></div>
+        <div class="nav-item">Inicio</div>
+        <div class="nav-item">Grupos</div>
+        <div class="nav-item">Analizar</div>
+        <div class="nav-item active">Resultados</div>
+        <div class="nav-item">Histórico</div>
+        <div class="side-foot">Resultado #7</div>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span class="where">RESULTADO · Igual_Jose.cs</span><div class="actions"><span class="pill">Volver</span><span class="pill">Descargar quiz</span></div></div>
+        <div class="content">
+          <div class="row">
+            <div class="box"><div class="label">Similitud</div><div class="value">100.0 %</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Probabilidad IA</div><div class="value">10.0 %</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Nivel de riesgo</div><div class="value" style="color:#b42318">Crítico</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Referencia</div><div class="value small">María Rodríguez</div><div class="line w60"></div></div>
+          </div>
+          <div class="tabs"><span class="tab active">Resumen</span><span class="tab">Diff</span><span class="tab">IA</span><span class="tab">Metadatos</span><span class="tab">Quiz</span></div>
+          <div class="row">
+            <div class="box" style="flex:1"><div class="label">Entrega A · José</div><div class="code-line">using System;</div><div class="code-line">class Programa {</div><div class="code-line add">  static void Main() {</div><div class="code-line">    Console.WriteLine("Hola");</div><div class="code-line">  }</div><div class="code-line">}</div></div>
+            <div class="box" style="flex:1"><div class="label">Entrega B · María</div><div class="code-line">using System;</div><div class="code-line">class Programa {</div><div class="code-line add">  static void Main() {</div><div class="code-line">    Console.WriteLine("Hola");</div><div class="code-line">  }</div><div class="code-line">}</div></div>
+          </div>
+          <div class="row">
+            <div class="box" style="flex:1"><div class="label">Observaciones</div><div class="line"></div><div class="line w80"></div><div style="display:flex;justify-content:flex-end;margin-top:2mm"><span class="btn-wire primary">Guardar</span></div></div>
+            <div class="box" style="flex:1"><div class="label">Defensa oral</div><div class="line w80"></div><div class="line w60"></div><div class="line w80"></div><div style="margin-top:2mm"><span class="btn-wire">Descargar quiz</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>Objetivo</h3>
+      <ul>
+        <li>Explicar por qué la entrega se parece a otra.</li>
+        <li>Mostrar el diff línea a línea lado a lado.</li>
+        <li>Documentar observaciones y generar un quiz personalizado.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>Similitud = 55 % tokens + 25 % shingles + 20 % líneas.</li>
+        <li>La IA se presenta como señal explicable, no como veredicto.</li>
+        <li>Metadatos: hash, propietario, fechas y codificación.</li>
+        <li>Quiz de 3–5 preguntas según estructura y métricas del código.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>Detalle del resultado</span><span>Bocetos · 7 / 8</span></div>
+</section>
+
+<!-- ============ 7. HISTÓRICO ============ -->
+<section class="page">
+  <div class="screen-head">
+    <div>
+      <div class="screen-num">PANTALLA 07</div>
+      <h2>Histórico y tendencias</h2>
+      <p>Seguimiento longitudinal por estudiante y por cómputo.</p>
+    </div>
+    <span class="badge">Seguimiento</span>
+  </div>
+
+  <div class="wire">
+    <div class="browser"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:5135/historico</div></div>
+    <div class="app">
+      <aside class="side">
+        <div class="brand">Analizador<small>DE PLAGIOS</small></div>
+        <div class="nav-item">Inicio</div>
+        <div class="nav-item">Grupos</div>
+        <div class="nav-item">Analizar</div>
+        <div class="nav-item">Resultados</div>
+        <div class="nav-item active">Histórico</div>
+        <div class="side-foot">Seguimiento longitudinal</div>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span class="where">HISTÓRICO</span><div class="actions"><span class="pill">Exportar CSV</span><span class="pill">Nuevo análisis</span></div></div>
+        <div class="content">
+          <div class="row">
+            <div class="box"><div class="label">Ejecuciones</div><div class="value">0</div></div>
+            <div class="box"><div class="label">Similitud media</div><div class="value">0.0 %</div></div>
+            <div class="box"><div class="label">IA media</div><div class="value">0.0 %</div></div>
+            <div class="box"><div class="label">Estudiantes seguidos</div><div class="value">0</div></div>
+          </div>
+          <div class="row">
+            <div class="box" style="flex:2"><div class="label">Buscar estudiante</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Ciclo</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Año</div><div class="line w60"></div></div>
+            <div class="box"><div class="label">Cómputo</div><div class="line w60"></div></div>
+          </div>
+          <div class="box" style="min-height:26mm">
+            <div class="label">Evolución por cómputo</div>
+            <div style="display:flex;align-items:flex-end;gap:4mm;height:17mm;padding:2mm 3mm;border-left:1px solid #d0d5dd;border-bottom:1px solid #d0d5dd">
+              <div style="width:9mm;height:4mm;background:#b2ccff"></div>
+              <div style="width:9mm;height:8mm;background:#84adff"></div>
+              <div style="width:9mm;height:13mm;background:#2563eb"></div>
+              <div style="margin-left:auto;font-size:5.5pt;color:#667085">C1 &nbsp; C2 &nbsp; C3</div>
+            </div>
+          </div>
+          <div class="box" style="padding:0;overflow:hidden">
+            <table class="wtable"><tr><th>Estudiante</th><th>Carnet</th><th>Periodo</th><th>Similitud</th><th>IA</th><th>Origen</th></tr>
+            <tr><td>—</td><td>—</td><td>Sin historial para estos filtros</td><td>—</td><td>—</td><td>—</td></tr></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>Objetivo</h3>
+      <ul>
+        <li>Ver la evolución de un estudiante entre cómputos y grupos.</li>
+        <li>Comparar promedios agregados por periodo.</li>
+        <li>Exportar el histórico filtrado.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>El estudiante se sigue por carnet, no por nombre.</li>
+        <li>Filtros por ciclo, año y cómputo.</li>
+        <li>Sin datos: estado vacío con opción de limpiar filtros.</li>
+        <li>El histórico conserva una instantánea de cada ejecución.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>Histórico y tendencias</span><span>Bocetos · 8 / 8</span></div>
+</section>
+
+</body>
+</html>

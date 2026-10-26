@@ -1,0 +1,430 @@
+@page "/resultados"
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject PreferenciasUi Prefs
+@inject ILogger<Resultados> Logger
+
+<PageTitle>Resultados · Analizador de Plagios</PageTitle>
+
+<div class="page-header">
+    <div>
+        <span class="eyebrow">Evidencia y trazabilidad</span>
+        <h1>Resultados de análisis</h1>
+        <p class="page-subtitle">Revise similitud, señales de IA y el diff lado a lado de cada entrega. El modo a ciegas oculta la identidad para reducir sesgos.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-ghost" href="@UrlCsv">
+            <Icon Nombre="download" Tamano="16" /> Exportar CSV
+        </a>
+        <a class="btn btn-primary" href="analisis">
+            <Icon Nombre="scan" Tamano="16" /> Nuevo análisis
+        </a>
+    </div>
+</div>
+
+@if (Prefs.ModoCiego)
+{
+    <div class="blind-banner">
+        <Icon Nombre="eye-off" Tamano="17" />
+        <span>Modo a ciegas activo: nombres y carnets se sustituyen por un identificador temporal en toda la lista y el detalle.</span>
+    </div>
+}
+
+<div class="stat-grid">
+    <article class="stat-card">
+        <div class="stat-top"><span class="stat-label">Entregas analizadas</span><span class="stat-icon"><Icon Nombre="file" Tamano="17" /></span></div>
+        <div class="stat-value">@_totalGeneral</div>
+        <div class="stat-hint">Registros guardados en la base local</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span class="stat-label">Similitud media</span><span class="stat-icon"><Icon Nombre="scale" Tamano="17" /></span></div>
+        <div class="stat-value">@_promedioGeneral.ToString("F1")<small>%</small></div>
+        <div class="stat-hint">Todas las comparaciones registradas</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span class="stat-label">Probabilidad IA media</span><span class="stat-icon"><Icon Nombre="sparkles" Tamano="17" /></span></div>
+        <div class="stat-value">@_promedioIaGeneral.ToString("F1")<small>%</small></div>
+        <div class="stat-hint">Señal heurística, no concluyente</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span class="stat-label">Alertas altas</span><span class="stat-icon"><Icon Nombre="alert" Tamano="17" /></span></div>
+        <div class="stat-value">@_alertasGenerales</div>
+        <div class="stat-hint">Similitud o IA ≥ 60%</div>
+    </article>
+</div>
+
+<section class="filters panel">
+    <div class="field grow">
+        <label for="buscar-resultado">Buscar</label>
+        <form class="row" @onsubmit="FiltrarAsync" @onsubmit:preventDefault>
+            <input id="buscar-resultado" class="input grow" @bind="_texto" @bind:event="oninput"
+                   placeholder="Estudiante, carnet, archivo o grupo…" autocomplete="off" />
+            <button type="submit" class="btn btn-secondary btn-sm" title="Buscar">
+                <Icon Nombre="search" Tamano="14" /> Buscar
+            </button>
+        </form>
+    </div>
+
+    <div class="field">
+        <label for="filtro-grupo-resultado">Grupo</label>
+        <select id="filtro-grupo-resultado" class="select" @bind="_grupoFiltro" @bind:after="FiltrarAsync">
+            <option value="0">Todos los grupos</option>
+            @foreach (var grupo in _grupos)
+            {
+                <option value="@grupo.Id">@grupo.Nombre · @grupo.Ciclo @grupo.Anio · C@(@grupo.Computo)</option>
+            }
+        </select>
+    </div>
+
+    <div class="field">
+        <label for="filtro-computo-resultado">Cómputo</label>
+        <select id="filtro-computo-resultado" class="select" @bind="_computoFiltro" @bind:after="FiltrarAsync">
+            <option value="0">Todos</option>
+            <option value="1">Cómputo 1</option>
+            <option value="2">Cómputo 2</option>
+            <option value="3">Cómputo 3</option>
+        </select>
+    </div>
+
+    <div class="field">
+        <label for="filtro-riesgo-resultado">Nivel</label>
+        <select id="filtro-riesgo-resultado" class="select" @bind="_riesgoFiltro" @bind:after="FiltrarAsync">
+            <option value="">Todos</option>
+            <option value="Crítico">Crítico</option>
+            <option value="Alto">Alto</option>
+            <option value="Medio">Medio</option>
+            <option value="Bajo">Bajo</option>
+        </select>
+    </div>
+
+    <div class="filter-actions">
+        <button type="button" class="btn btn-ghost btn-sm" @onclick="LimpiarFiltrosAsync">
+            <Icon Nombre="refresh" Tamano="14" /> Limpiar
+        </button>
+    </div>
+</section>
+
+@if (_cargando)
+{
+    <div class="loading-state"><span class="spinner large"></span> Cargando resultados…</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-error">
+        <Icon Nombre="alert" Tamano="18" />
+        <div>
+            <strong>No se pudieron cargar los resultados.</strong>
+            <div>@_error</div>
+        </div>
+    </div>
+}
+else if (_evaluaciones.Count == 0)
+{
+    <div class="empty-state">
+        <Icon Nombre="list" Tamano="34" />
+        <strong>No hay resultados para esta consulta</strong>
+        @if (_totalGeneral == 0)
+        {
+            <span>Aún no se ha analizado ninguna entrega. Cree un grupo y cargue dos archivos para comenzar.</span>
+            <a class="btn btn-primary btn-sm mt-2" href="analisis"><Icon Nombre="scan" Tamano="14" /> Analizar entrega</a>
+        }
+        else
+        {
+            <span>Ajuste los filtros o limpie la búsqueda para ver los análisis registrados.</span>
+            <button type="button" class="btn btn-ghost btn-sm mt-2" @onclick="LimpiarFiltrosAsync">Limpiar filtros</button>
+        }
+    </div>
+}
+else
+{
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Estudiante</th>
+                    <th>Entrega</th>
+                    <th>Similitud</th>
+                    <th>IA</th>
+                    <th>Nivel</th>
+                    <th>Fecha</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _evaluaciones)
+                {
+                    <tr>
+                        <td>
+                            <div class="student-name">
+                                <strong>@Prefs.NombreVisible(item.EstudianteId, item.EstudianteNombre)</strong>
+                                <span>@Prefs.CarnetVisible(item.EstudianteId, item.EstudianteCarnet)</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="primary-cell">@item.NombreArchivo</div>
+                            <span class="tiny muted">@item.GrupoNombre · @item.Ciclo @item.Anio · C@(@item.Computo)</span>
+                        </td>
+                        <td>
+                            <div class="metric-cell">
+                                <span class="metric-number @ClaseRiesgo(item.Similitud)">@item.Similitud.ToString("F1")%</span>
+                                <div class="progress @ClaseRiesgo(item.Similitud)"><span style="width:@Porcentaje(item.Similitud)"></span></div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="metric-cell">
+                                <span class="metric-number @(item.ProbabilidadIA >= 60 ? "warn" : item.ProbabilidadIA >= 40 ? "info" : "ok")">@item.ProbabilidadIA.ToString("F1")%</span>
+                                <div class="progress @(item.ProbabilidadIA >= 60 ? "warn" : item.ProbabilidadIA >= 40 ? "info" : "ok")"><span style="width:@Porcentaje(item.ProbabilidadIA)"></span></div>
+                            </div>
+                        </td>
+                        <td><span class="badge @ClaseBadge(item.NivelRiesgo)">@item.NivelRiesgo</span></td>
+                        <td class="nowrap tiny muted">@item.FechaAnalisis.ToLocalTime().ToString("dd/MM/yy HH:mm")</td>
+                        <td class="actions-cell">
+                            <a class="btn btn-ghost btn-sm" href="@($"resultados/{item.Id}")">
+                                <Icon Nombre="eye" Tamano="14" /> Abrir
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="pagination">
+        <span class="pagination-info">
+            Mostrando @InicioPagina–@FinPagina de @_total resultado(s) · página @_pagina de @TotalPaginas
+        </span>
+        <div class="pagination-actions">
+            <button type="button" class="btn btn-ghost btn-sm" disabled="@(_pagina <= 1)" @onclick="() => IrPaginaAsync(_pagina - 1)">
+                <Icon Nombre="arrow-left" Tamano="14" /> Anterior
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" disabled="@(_pagina >= TotalPaginas)" @onclick="() => IrPaginaAsync(_pagina + 1)">
+                Siguiente <Icon Nombre="chevron-right" Tamano="14" />
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private const int TamanoPagina = 12;
+
+    private bool _cargando = true;
+    private string? _error;
+    private List<EvaluacionResumen> _evaluaciones = new();
+    private List<GrupoResumen> _grupos = new();
+
+    private int _grupoFiltro;
+    private int _computoFiltro;
+    private string _riesgoFiltro = string.Empty;
+    private string _texto = string.Empty;
+
+    private int _total;
+    private int _pagina = 1;
+
+    private int _totalGeneral;
+    private double _promedioGeneral;
+    private double _promedioIaGeneral;
+    private int _alertasGenerales;
+
+    private int TotalPaginas => Math.Max(1, (int)Math.Ceiling(_total / (double)TamanoPagina));
+    private int InicioPagina => _total == 0 ? 0 : (_pagina - 1) * TamanoPagina + 1;
+    private int FinPagina => Math.Min(_pagina * TamanoPagina, _total);
+
+    private string UrlCsv
+    {
+        get
+        {
+            var parametros = new List<string>();
+            if (_grupoFiltro > 0)
+            {
+                parametros.Add($"grupoId={_grupoFiltro}");
+            }
+
+            if (_computoFiltro is >= 1 and <= 3)
+            {
+                parametros.Add($"computo={_computoFiltro}");
+            }
+
+            return parametros.Count == 0
+                ? "api/resultados/exportar.csv"
+                : $"api/resultados/exportar.csv?{string.Join("&", parametros)}";
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        Prefs.Cambio += AlCambiarPreferencias;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarGruposAsync();
+        await CargarResumenGlobalAsync();
+        await CargarAsync();
+    }
+
+    private async Task CargarGruposAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _grupos = await db.Grupos
+                .AsNoTracking()
+                .OrderByDescending(g => g.Anio)
+                .ThenBy(g => g.Ciclo)
+                .ThenBy(g => g.Computo)
+                .ThenBy(g => g.Nombre)
+                .Select(g => new GrupoResumen
+                {
+                    Id = g.Id,
+                    Nombre = g.Nombre,
+                    Codigo = g.Codigo,
+                    Anio = g.Anio,
+                    Ciclo = g.Ciclo,
+                    Computo = g.Computo
+                })
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando grupos para filtros");
+            _error = $"No se pudieron cargar los grupos: {ex.Message}";
+        }
+    }
+
+    private async Task CargarResumenGlobalAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _totalGeneral = await db.Evaluaciones.CountAsync();
+            _promedioGeneral = await db.Evaluaciones.Select(e => (double?)e.Similitud).AverageAsync() ?? 0;
+            _promedioIaGeneral = await db.Evaluaciones.Select(e => (double?)e.ProbabilidadIA).AverageAsync() ?? 0;
+            _alertasGenerales = await db.Evaluaciones.CountAsync(e => e.Similitud >= 60 || e.ProbabilidadIA >= 60);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando el resumen global de resultados");
+        }
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var consulta = db.Evaluaciones.AsNoTracking().AsQueryable();
+
+            if (_grupoFiltro > 0)
+            {
+                consulta = consulta.Where(e => e.GrupoId == _grupoFiltro);
+            }
+
+            if (_computoFiltro is >= 1 and <= 3)
+            {
+                consulta = consulta.Where(e => e.Grupo != null && e.Grupo.Computo == _computoFiltro);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_riesgoFiltro))
+            {
+                consulta = consulta.Where(e => e.NivelRiesgo == _riesgoFiltro);
+            }
+
+            var texto = (_texto ?? string.Empty).Trim();
+            if (texto.Length > 0)
+            {
+                var patron = $"%{texto}%";
+                consulta = consulta.Where(e =>
+                    (e.Estudiante != null && (EF.Functions.Like(e.Estudiante.Nombre, patron) || EF.Functions.Like(e.Estudiante.Carnet, patron))) ||
+                    EF.Functions.Like(e.NombreArchivo, patron) ||
+                    (e.Grupo != null && (EF.Functions.Like(e.Grupo.Nombre, patron) || EF.Functions.Like(e.Grupo.Codigo, patron))));
+            }
+
+            _total = await consulta.CountAsync();
+            var paginas = Math.Max(1, (int)Math.Ceiling(_total / (double)TamanoPagina));
+            if (_pagina > paginas)
+            {
+                _pagina = paginas;
+            }
+
+            _evaluaciones = await consulta
+                .OrderByDescending(e => e.FechaAnalisis)
+                .ThenByDescending(e => e.Id)
+                .Skip((_pagina - 1) * TamanoPagina)
+                .Take(TamanoPagina)
+                .Select(e => new EvaluacionResumen
+                {
+                    Id = e.Id,
+                    EstudianteId = e.EstudianteId,
+                    EstudianteNombre = e.Estudiante != null ? e.Estudiante.Nombre : "Sin estudiante",
+                    EstudianteCarnet = e.Estudiante != null ? e.Estudiante.Carnet : string.Empty,
+                    GrupoNombre = e.Grupo != null ? e.Grupo.Nombre : string.Empty,
+                    GrupoCodigo = e.Grupo != null ? e.Grupo.Codigo : string.Empty,
+                    Computo = e.Grupo != null ? e.Grupo.Computo : 0,
+                    Anio = e.Grupo != null ? e.Grupo.Anio : 0,
+                    Ciclo = e.Grupo != null ? e.Grupo.Ciclo : string.Empty,
+                    NombreArchivo = e.NombreArchivo,
+                    Similitud = e.Similitud,
+                    ProbabilidadIA = e.ProbabilidadIA,
+                    NivelRiesgo = e.NivelRiesgo,
+                    FechaAnalisis = e.FechaAnalisis
+                })
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando resultados");
+            _error = $"No se pudieron cargar los resultados: {ex.Message}";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task FiltrarAsync()
+    {
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task LimpiarFiltrosAsync()
+    {
+        _grupoFiltro = 0;
+        _computoFiltro = 0;
+        _riesgoFiltro = string.Empty;
+        _texto = string.Empty;
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task IrPaginaAsync(int pagina)
+    {
+        if (pagina < 1 || pagina > TotalPaginas)
+        {
+            return;
+        }
+
+        _pagina = pagina;
+        await CargarAsync();
+    }
+
+    private static string ClaseRiesgo(double valor)
+        => valor >= 80 ? "danger" : valor >= 60 ? "warn" : valor >= 35 ? "info" : "ok";
+
+    private static string ClaseBadge(string? nivel) => nivel switch
+    {
+        "Crítico" => "badge-critico",
+        "Alto" => "badge-alto",
+        "Medio" => "badge-medio",
+        _ => "badge-bajo"
+    };
+
+    private static string Porcentaje(double valor)
+        => $"{Math.Clamp(valor, 0, 100).ToString("0.#", CultureInfo.InvariantCulture)}%";
+
+    private void AlCambiarPreferencias() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Prefs.Cambio -= AlCambiarPreferencias;
+}

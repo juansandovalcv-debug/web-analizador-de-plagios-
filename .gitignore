@@ -1,0 +1,31 @@
+# .NET / build
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Datos locales de la aplicación
+sistema_plagio.db
+sistema_plagio.db-shm
+sistema_plagio.db-wal
+App_Data/
+uploads/
+
+# Temporales y registros
+*.tmp
+*.log
+*.bak
+*.cache
+
+# Sistema operativo / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# Publicación local
+publish/

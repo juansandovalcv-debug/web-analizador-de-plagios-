@@ -1,0 +1,90 @@
+@using System.Globalization
+
+@if (_datos.Count == 0)
+{
+    <div class="empty-state compact">
+        <Icon Nombre="chart" Tamano="30" />
+        <strong>Sin datos de evolución</strong>
+        <span>Registre análisis en al menos un cómputo para ver la tendencia.</span>
+    </div>
+}
+else
+{
+    <div class="trend-chart">
+        <div class="chart-legend">
+            <span class="legend-item"><i class="dot dot-sim"></i> @NombreA</span>
+            <span class="legend-item"><i class="dot dot-ia"></i> @NombreB</span>
+        </div>
+        <svg viewBox="0 0 860 320" class="trend-svg" role="img" aria-label="Gráfica de evolución por cómputo">
+            @for (var nivel = 100; nivel >= 0; nivel -= 25)
+            {
+                var y = Y(nivel);
+                <line x1="@Izq" y1="@F(y)" x2="@(Ancho - Der)" y2="@F(y)" class="chart-grid" />
+                @((MarkupString)$"<text x=\"{F(Izq - 10)}\" y=\"{F(y + 4)}\" text-anchor=\"end\" class=\"chart-axis\">{nivel}%</text>")
+            }
+
+            @for (var i = 0; i < _datos.Count; i++)
+            {
+                var punto = _datos[i];
+                var centro = XCentro(i);
+                var anchoBarra = Math.Min(28, GroupWidth * 0.22);
+                var separacion = 5;
+                var xA = centro - anchoBarra - separacion / 2;
+                var xB = centro + separacion / 2;
+                var yA = Y(punto.A);
+                var yB = Y(punto.B);
+                var altoA = AlturaBarra(punto.A);
+                var altoB = AlturaBarra(punto.B);
+
+                <rect x="@F(xA)" y="@F(yA)" width="@F(anchoBarra)" height="@F(altoA)" rx="4" class="bar-sim">
+                    <title>@punto.Etiqueta · @NombreA: @punto.A.ToString("F1", CultureInfo.InvariantCulture)%</title>
+                </rect>
+                <rect x="@F(xB)" y="@F(yB)" width="@F(anchoBarra)" height="@F(altoB)" rx="4" class="bar-ia">
+                    <title>@punto.Etiqueta · @NombreB: @punto.B.ToString("F1", CultureInfo.InvariantCulture)%</title>
+                </rect>
+                @((MarkupString)$"<text x=\"{F(centro)}\" y=\"{F(Alto - 14)}\" text-anchor=\"middle\" class=\"chart-label\">{System.Net.WebUtility.HtmlEncode(punto.Etiqueta)}</text>")
+            }
+        </svg>
+    </div>
+}
+
+@code {
+    [Parameter] public List<string> Etiquetas { get; set; } = new();
+    [Parameter] public List<double> SerieASimilitud { get; set; } = new();
+    [Parameter] public List<double> SerieBIA { get; set; } = new();
+    [Parameter] public string NombreA { get; set; } = "Similitud";
+    [Parameter] public string NombreB { get; set; } = "Probabilidad IA";
+
+    private const double Ancho = 860;
+    private const double Alto = 320;
+    private const double Izq = 52;
+    private const double Der = 22;
+    private const double Arriba = 22;
+    private const double Abajo = 46;
+
+    private List<Punto> _datos = new();
+
+    private double GroupWidth => (Ancho - Izq - Der) / Math.Max(1, _datos.Count);
+    private double PlotHeight => Alto - Arriba - Abajo;
+
+    protected override void OnParametersSet()
+    {
+        var total = Math.Max(Etiquetas.Count, Math.Max(SerieASimilitud.Count, SerieBIA.Count));
+        _datos = Enumerable.Range(0, total)
+            .Select(i => new Punto(
+                i < Etiquetas.Count && !string.IsNullOrWhiteSpace(Etiquetas[i]) ? Etiquetas[i] : $"C{i + 1}",
+                i < SerieASimilitud.Count ? Math.Clamp(SerieASimilitud[i], 0, 100) : 0,
+                i < SerieBIA.Count ? Math.Clamp(SerieBIA[i], 0, 100) : 0))
+            .ToList();
+    }
+
+    private double XCentro(int indice) => Izq + GroupWidth * (indice + 0.5);
+
+    private double Y(double valor) => Arriba + PlotHeight * (1 - Math.Clamp(valor, 0, 100) / 100d);
+
+    private double AlturaBarra(double valor) => PlotHeight * Math.Clamp(valor, 0, 100) / 100d;
+
+    private static string F(double valor) => valor.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private sealed record Punto(string Etiqueta, double A, double B);
+}

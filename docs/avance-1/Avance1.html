@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avance 1 · Analizador de Plagios para Entregas de Código C#</title>
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --ink: #12231f;
+    --muted: #5d726c;
+    --soft: #7e918b;
+    --line: #d6e3df;
+    --paper: #f7faf9;
+    --white: #ffffff;
+    --teal: #0f766e;
+    --teal-dark: #08473f;
+    --mint: #59dfc4;
+    --coral: #d96152;
+    --gold: #b7791f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Inter", Arial, sans-serif;
+    color: var(--ink);
+    background: #dfe7e4;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 9pt;
+    line-height: 1.42;
+  }
+  .page {
+    width: 210mm;
+    height: 297mm;
+    padding: 15mm 15mm 13mm;
+    background: var(--paper);
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    margin: 0 auto;
+  }
+  .page:last-child { page-break-after: auto; }
+  @media screen {
+    body { padding: 8mm 0; }
+    .page { margin-bottom: 7mm; box-shadow: 0 4px 24px rgba(7, 30, 25, .16); }
+  }
+  @media print {
+    body { background: #fff; }
+    .page { margin: 0; box-shadow: none; }
+  }
+
+  .kicker {
+    font-size: 7pt;
+    letter-spacing: .17em;
+    color: var(--teal);
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  h2 {
+    font-size: 20pt;
+    line-height: 1.08;
+    letter-spacing: -.022em;
+    margin: 2mm 0 1.4mm;
+    color: #0a2924;
+  }
+  .lead {
+    font-size: 9pt;
+    color: var(--muted);
+    line-height: 1.5;
+    max-width: 165mm;
+    margin: 0;
+  }
+  h3 {
+    font-size: 9.2pt;
+    margin: 0 0 1.4mm;
+    color: #0c3f37;
+    letter-spacing: -.01em;
+  }
+  p { margin: 0 0 2.2mm; }
+  strong { color: #0b332c; }
+  .small { font-size: 7.6pt; color: var(--muted); line-height: 1.45; }
+  .tiny { font-size: 6.7pt; color: var(--soft); line-height: 1.4; }
+  .accent { color: var(--teal); }
+
+  .foot {
+    position: absolute;
+    left: 15mm;
+    right: 15mm;
+    bottom: 6.5mm;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: .35pt solid var(--line);
+    padding-top: 2mm;
+    font-size: 6.8pt;
+    color: var(--soft);
+    letter-spacing: .02em;
+  }
+  .foot b { color: #4d6a63; font-weight: 700; }
+  .pnum {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 7mm;
+    height: 5mm;
+    border-radius: 10mm;
+    background: #e5efec;
+    color: #416259;
+    font-weight: 700;
+    font-size: 6.6pt;
+  }
+
+  /* Portada */
+  .cover {
+    background:
+      radial-gradient(circle at 82% 15%, rgba(32, 128, 111, .55), transparent 38%),
+      radial-gradient(circle at 14% 85%, rgba(15, 118, 110, .22), transparent 36%),
+      linear-gradient(145deg, #04110f 0%, #08241f 55%, #061713 100%);
+    color: #eefbf7;
+    padding: 17mm 17mm 15mm;
+  }
+  .cover::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(115, 226, 204, .055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(115, 226, 204, .055) 1px, transparent 1px);
+    background-size: 13mm 13mm;
+    mask-image: linear-gradient(to bottom, black, transparent 72%);
+  }
+  .cover > * { position: relative; z-index: 1; }
+  .cover-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(126, 235, 211, .18);
+    padding-bottom: 4mm;
+    font-size: 7pt;
+    letter-spacing: .18em;
+    color: #9bd8c9;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .brandline { display: flex; align-items: center; gap: 3mm; }
+  .brandmark {
+    width: 9mm;
+    height: 9mm;
+    border-radius: 2.4mm;
+    border: 1px solid rgba(99, 230, 204, .62);
+    background: rgba(12, 83, 72, .55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #79f1d8;
+    font-size: 16pt;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .brandline span { color: #d7f8ef; letter-spacing: .1em; }
+  .cover-main { margin-top: 34mm; max-width: 150mm; }
+  .eyebrow {
+    color: #6ce7cf;
+    font-size: 8pt;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    font-weight: 800;
+    margin-bottom: 5mm;
+  }
+  .cover h1 {
+    font-size: 30pt;
+    line-height: 1.04;
+    letter-spacing: -.035em;
+    margin: 0 0 5mm;
+    max-width: 148mm;
+    color: #f7fffc;
+  }
+  .cover .subtitle {
+    font-size: 14pt;
+    line-height: 1.3;
+    color: #8ef0da;
+    margin-bottom: 5mm;
+    letter-spacing: -.01em;
+  }
+  .cover .desc {
+    font-size: 9.6pt;
+    line-height: 1.6;
+    color: #b9d5ce;
+    max-width: 132mm;
+    margin-bottom: 9mm;
+  }
+  .badges { display: flex; flex-wrap: wrap; gap: 2mm; }
+  .badge {
+    border: 1px solid rgba(124, 235, 211, .28);
+    background: rgba(15, 79, 68, .42);
+    color: #bdf4e7;
+    padding: 1.5mm 2.6mm;
+    border-radius: 20mm;
+    font-size: 7pt;
+    letter-spacing: .03em;
+  }
+  .cover-score {
+    position: absolute;
+    right: 17mm;
+    top: 150mm;
+    width: 68mm;
+    padding: 5.5mm;
+    border-radius: 4mm;
+    border: 1px solid rgba(126, 235, 211, .24);
+    background: linear-gradient(160deg, rgba(9, 54, 46, .88), rgba(5, 22, 19, .82));
+    box-shadow: 0 6mm 18mm rgba(0, 0, 0, .28);
+    transform: rotate(2.3deg);
+  }
+  .cover-score .label {
+    font-size: 6.4pt;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    color: #8ccdbf;
+    font-weight: 700;
+  }
+  .cover-score .value {
+    font-size: 33pt;
+    font-weight: 800;
+    letter-spacing: -.06em;
+    color: #ff8c7d;
+    line-height: 1.05;
+    margin-top: 2mm;
+  }
+  .cover-score .value span { font-size: 15pt; color: #ffb2a7; }
+  .cover-score .meta { font-size: 7pt; color: #b8d8d0; margin-top: 1mm; }
+  .bar { height: 1.7mm; border-radius: 4mm; background: #123b34; overflow: hidden; margin-top: 4mm; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff8c7d, #ffb09f); border-radius: 4mm; }
+  .mini-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 6.4pt;
+    color: #84b9ad;
+    margin-top: 2mm;
+  }
+  .cover-bottom {
+    position: absolute;
+    left: 17mm;
+    right: 17mm;
+    bottom: 16mm;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4mm;
+    border-top: 1px solid rgba(126, 235, 211, .18);
+    padding-top: 5mm;
+  }
+  .cover-bottom div { display: flex; flex-direction: column; gap: .8mm; }
+  .cover-bottom span {
+    font-size: 6.4pt;
+    text-transform: uppercase;
+    letter-spacing: .13em;
+    color: #74a99d;
+    font-weight: 700;
+  }
+  .cover-bottom strong { color: #d8f7ef; font-size: 8pt; font-weight: 650; }
+
+  /* Página 2 */
+  .project-grid {
+    display: grid;
+    grid-template-columns: 1.55fr .95fr;
+    gap: 8mm;
+    margin-top: 6mm;
+  }
+  .name-box {
+    background: linear-gradient(145deg, #0d3f37, #082a25);
+    color: #effbf7;
+    border-radius: 2.5mm;
+    padding: 6mm;
+    margin-bottom: 5mm;
+    position: relative;
+    overflow: hidden;
+  }
+  .name-box::after {
+    content: "C#";
+    position: absolute;
+    right: 5mm;
+    top: -2mm;
+    font-size: 31pt;
+    font-weight: 800;
+    color: rgba(111, 235, 209, .12);
+    letter-spacing: -.06em;
+  }
+  .name-box .tag { color: #6ee7cf; font-size: 6.8pt; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; }
+  .name-box h3 { color: #fff; font-size: 14.5pt; line-height: 1.18; margin: 2.5mm 0 1.5mm; letter-spacing: -.02em; }
+  .name-box p { color: #b6d8d0; margin: 0; font-size: 8pt; line-height: 1.45; }
+  .project-copy p { font-size: 8.7pt; line-height: 1.55; color: #3e554f; }
+  .project-copy h3 { margin-top: 4mm; }
+  .bullets { margin: 1.5mm 0 0 4.2mm; padding: 0; }
+  .bullets li { margin-bottom: 1.6mm; font-size: 8.3pt; line-height: 1.4; color: #3b514b; }
+  .bullets li::marker { color: var(--teal); }
+  .side-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 2.5mm;
+    padding: 5mm;
+    margin-bottom: 4mm;
+  }
+  .side-card h3 { font-size: 8.5pt; margin-bottom: 2.5mm; }
+  .fact { display: flex; justify-content: space-between; gap: 3mm; font-size: 7.4pt; padding: 1.6mm 0; border-bottom: .3pt solid #e8f0ed; }
+  .fact:last-child { border-bottom: 0; }
+  .fact span { color: var(--soft); }
+  .fact b { color: #25443c; text-align: right; font-weight: 650; }
+  .toc { margin: 2.5mm 0 0; padding: 0; list-style: none; }
+  .toc li { display: flex; justify-content: space-between; gap: 3mm; font-size: 7.4pt; padding: 1.5mm 0; border-bottom: .3pt dotted #d5e2de; }
+  .toc li:last-child { border-bottom: 0; }
+  .toc b { color: var(--teal); }
+  .principle {
+    margin-top: 4mm;
+    border-left: 2.5pt solid var(--mint);
+    background: #eaf6f2;
+    padding: 3.5mm 4mm;
+    border-radius: 0 1.5mm 1.5mm 0;
+    font-size: 7.9pt;
+    color: #2e5148;
+    line-height: 1.45;
+  }
+  .principle strong { color: #0b493f; }
+  .rubric-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2mm;
+    margin-top: 4mm;
+    padding: 3mm;
+    border: 1px solid var(--line);
+    border-radius: 2mm;
+    background: #fff;
+  }
+  .rubric-strip div { padding: 1mm 1.5mm; border-right: .3pt solid #e4eeea; }
+  .rubric-strip div:last-child { border-right: 0; }
+  .rubric-strip span {
+    display: block;
+    font-size: 5.9pt;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #7a8e88;
+    font-weight: 700;
+    margin-bottom: .8mm;
+  }
+  .rubric-strip b { display: block; font-size: 6.9pt; color: #18564b; line-height: 1.3; }
+
+  /* Flujo */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 1.4mm;
+    margin: 6mm 0 5mm;
+  }
+  .flow-step {
+    flex: 1;
+    min-height: 24mm;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 2mm;
+    padding: 2.5mm;
+    position: relative;
+  }
+  .flow-step .n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 5mm;
+    height: 5mm;
+    border-radius: 50%;
+    background: var(--teal);
+    color: #fff;
+    font-size: 6.5pt;
+    font-weight: 800;
+    margin-bottom: 1.5mm;
+  }
+  .flow-step h4 { font-size: 7.5pt; margin: 0 0 1mm; color: #123d35; line-height: 1.2; }
+  .flow-step p { font-size: 6.4pt; line-height: 1.35; color: var(--muted); margin: 0; }
+  .flow-arrow { color: #83b8ad; font-size: 12pt; font-weight: 700; }
+  .flow-note {
+    display: flex;
+    gap: 2mm;
+    align-items: center;
+    margin: -1mm 0 4mm;
+    font-size: 7pt;
+    color: var(--muted);
+  }
+  .pill {
+    display: inline-block;
+    border-radius: 20mm;
+    background: #e4f5f0;
+    color: #0c675b;
+    padding: 1mm 2.5mm;
+    font-size: 6.6pt;
+    font-weight: 700;
+    letter-spacing: .02em;
+    white-space: nowrap;
+  }
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.2pt;
+    line-height: 1.35;
+  }
+  .table th {
+    text-align: left;
+    font-size: 6.3pt;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #5d776f;
+    background: #eaf3f0;
+    padding: 2mm 2.5mm;
+    border-bottom: 1px solid #cbded8;
+  }
+  .table td {
+    padding: 2mm 2.5mm;
+    border-bottom: .3pt solid #e3ece9;
+    vertical-align: top;
+    color: #344c45;
+  }
+  .table tr:last-child td { border-bottom: 0; }
+  .table td b { color: #163d35; }
+  .rules {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3mm;
+    margin-top: 5mm;
+  }
+  .rule {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 2mm;
+    padding: 3.2mm;
+  }
+  .rule h4 { font-size: 7.4pt; margin: 0 0 1.3mm; color: #0e4a40; }
+  .rule p { font-size: 6.7pt; line-height: 1.4; color: var(--muted); margin: 0; }
+
+  /* Pantallas */
+  .shot { margin: 3.5mm 0 0; }
+  .shot img {
+    width: 100%;
+    display: block;
+    border-radius: 2.4mm;
+    border: 1px solid #26473f;
+    box-shadow: 0 2mm 5mm rgba(7, 34, 28, .17);
+  }
+  .shot figcaption {
+    display: flex;
+    justify-content: space-between;
+    gap: 4mm;
+    font-size: 6.5pt;
+    color: var(--soft);
+    margin-top: 1.5mm;
+  }
+  .shot figcaption b { color: #52756c; font-weight: 650; }
+  .shot.tall img { width: 151mm; margin: 0 auto; }
+  .shot.mid img { width: 170mm; margin: 0 auto; }
+  .notes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6mm;
+    margin-top: 4mm;
+  }
+  .notes h3 {
+    display: flex;
+    align-items: center;
+    gap: 1.5mm;
+    font-size: 8.4pt;
+    margin-bottom: 1.6mm;
+  }
+  .notes h3::before {
+    content: "";
+    width: 2.2mm;
+    height: 2.2mm;
+    border-radius: 1mm;
+    background: var(--teal);
+    display: inline-block;
+  }
+  .notes ul { margin: 0 0 0 4mm; padding: 0; }
+  .notes li { font-size: 7.6pt; line-height: 1.45; color: #3d554e; margin-bottom: 1.3mm; }
+  .notes li::marker { color: var(--teal); }
+  .callout {
+    margin-top: 3mm;
+    padding: 2.8mm 3.5mm;
+    background: #eaf6f2;
+    border-left: 2.2pt solid var(--mint);
+    border-radius: 0 1.5mm 1.5mm 0;
+    font-size: 7.2pt;
+    color: #31584e;
+    line-height: 1.45;
+  }
+  .callout b { color: #0b4a3f; }
+  .formula {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2.5mm;
+    margin-top: 2.5mm;
+  }
+  .formula div {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 1.8mm;
+    padding: 2.2mm;
+    text-align: center;
+  }
+  .formula b { display: block; font-size: 14pt; color: var(--teal); letter-spacing: -.03em; line-height: 1; }
+  .formula span { display: block; font-size: 6.2pt; color: var(--muted); margin-top: 1mm; line-height: 1.3; }
+  .csvbox {
+    background: #0a211d;
+    color: #d7f5ec;
+    border-radius: 2mm;
+    padding: 3mm;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 6.1pt;
+    line-height: 1.55;
+    margin-top: 2mm;
+  }
+  .csvbox .ok { color: #67e0c3; }
+  .csvbox .bad { color: #ff9b8b; }
+  .mini-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2.5mm;
+    margin-top: 3mm;
+  }
+  .mini-strip div {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 1.7mm;
+    padding: 2.2mm 2.8mm;
+    font-size: 6.5pt;
+    color: #536b64;
+    line-height: 1.35;
+  }
+  .mini-strip b { display: block; color: #0c4b40; font-size: 6.8pt; margin-bottom: .5mm; }
+  .risk-row {
+    display: flex;
+    gap: 2mm;
+    margin-top: 3mm;
+  }
+  .risk-chip {
+    flex: 1;
+    border-radius: 1.5mm;
+    padding: 2mm 2.5mm;
+    border: 1px solid #e1eae7;
+    background: #fff;
+  }
+  .risk-chip b { display: block; font-size: 7.2pt; margin-bottom: .4mm; }
+  .risk-chip span { font-size: 6.1pt; color: #73857f; }
+  .risk-chip.crit b { color: #b23e32; }
+  .risk-chip.alto b { color: #bd6a1e; }
+  .risk-chip.medio b { color: #8b7a17; }
+  .risk-chip.bajo b { color: #13715e; }
+  .deps {
+    display: grid;
+    grid-template-columns: 1.2fr .8fr;
+    gap: 2.5mm;
+    margin-top: 3mm;
+  }
+  .deps > div {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 1.8mm;
+    padding: 2.8mm 3.2mm;
+    font-size: 6.5pt;
+    line-height: 1.45;
+    color: #465f58;
+  }
+  .deps b { color: #0c4b40; }
+  .deps code { font-family: Consolas, monospace; font-size: 6.3pt; color: #174f44; }
+  .rubric-table td:first-child { width: 30%; font-weight: 650; color: #0d4d41; }
+  .rubric-table td:last-child { width: 22%; color: #5c746d; white-space: nowrap; }
+
+  /* Base de datos */
+  .db-svg { width: 100%; display: block; margin: 2mm 0 1mm; }
+  .db-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 5mm; margin-top: 4mm; }
+  .db-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 2mm;
+    padding: 3.5mm;
+  }
+  .db-card h3 { font-size: 8pt; margin-bottom: 2mm; }
+  .rel { display: flex; justify-content: space-between; gap: 2mm; font-size: 6.9pt; padding: 1.1mm 0; border-bottom: .3pt dotted #dbe7e3; }
+  .rel:last-child { border-bottom: 0; }
+  .rel span { color: #3e5a52; }
+  .rel b { color: var(--teal); white-space: nowrap; }
+  .idx { width: 100%; border-collapse: collapse; font-size: 6.6pt; }
+  .idx td { padding: 1.1mm 1mm; border-bottom: .3pt solid #e7efec; vertical-align: top; }
+  .idx tr:last-child td { border-bottom: 0; }
+  .idx td:first-child { color: #18564b; font-weight: 650; }
+  .idx td:last-child { color: #6a7f79; }
+  .norm {
+    margin-top: 3mm;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 3mm;
+  }
+  .norm div {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 2mm;
+    padding: 2.8mm;
+    font-size: 6.9pt;
+    line-height: 1.42;
+    color: #3c554e;
+  }
+  .norm b { color: #0b4a40; display: block; margin-bottom: .8mm; }
+  .dict-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2.5mm;
+    margin-top: 4mm;
+  }
+  .dict {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 1.8mm;
+    overflow: hidden;
+  }
+  .dict h4 {
+    margin: 0;
+    background: #0b3d35;
+    color: #e9fbf6;
+    font-size: 7.2pt;
+    padding: 1.8mm 2mm;
+    display: flex;
+    justify-content: space-between;
+    gap: 2mm;
+  }
+  .dict h4 span { color: #7ae2cd; font-size: 6.2pt; font-weight: 600; }
+  .dict ul { list-style: none; margin: 0; padding: 1.4mm 1.8mm; }
+  .dict li {
+    font-size: 6.1pt;
+    line-height: 1.35;
+    padding: .65mm 0;
+    border-bottom: .25pt dotted #e1ebe8;
+    color: #3c544d;
+  }
+  .dict li:last-child { border-bottom: 0; }
+  .dict code { font-family: Consolas, monospace; color: #123f36; font-size: 6.1pt; }
+  .pk, .fk {
+    display: inline-block;
+    font-size: 4.9pt;
+    font-weight: 800;
+    border-radius: .8mm;
+    padding: .15mm .8mm;
+    margin-right: .7mm;
+    vertical-align: .2mm;
+  }
+  .pk { background: #d8f6ee; color: #0c705f; }
+  .fk { background: #fbe9d8; color: #9a5a16; }
+  .dict .type { color: #7c8e89; font-size: 5.7pt; }
+
+  /* Arquitectura */
+  .arch-wrap {
+    margin-top: 4mm;
+    border: 1px dashed #9ec9bf;
+    border-radius: 3mm;
+    padding: 4mm;
+    background: #f1f8f5;
+  }
+  .arch-row {
+    display: grid;
+    grid-template-columns: 29mm 1fr;
+    gap: 3mm;
+    align-items: stretch;
+  }
+  .arch-label {
+    display: flex;
+    align-items: center;
+    font-size: 6.3pt;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #678078;
+  }
+  .arch-box {
+    background: #fff;
+    border: 1px solid #cfe0db;
+    border-radius: 1.8mm;
+    padding: 2.5mm 3mm;
+    font-size: 7.1pt;
+    line-height: 1.4;
+    color: #34524a;
+  }
+  .arch-box b { color: #0e4b40; }
+  .arch-box .chips { display: flex; flex-wrap: wrap; gap: 1.2mm; margin-top: 1.2mm; }
+  .arch-box .chip { background: #edf7f4; border: 1px solid #d3e8e2; border-radius: 20mm; padding: .5mm 1.7mm; font-size: 5.9pt; color: #366257; }
+  .arch-arrow { text-align: center; color: #6eb4a5; font-size: 9pt; line-height: 1.1; padding: .8mm 0; }
+  .arch-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3mm;
+    margin-top: 3mm;
+  }
+  .arch-side .mini {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 1.8mm;
+    padding: 2.5mm;
+    font-size: 6.6pt;
+    line-height: 1.4;
+    color: #4b655d;
+  }
+  .arch-side b { display: block; color: #0f4e43; font-size: 7pt; margin-bottom: .8mm; }
+  .stack-table td:first-child { width: 30%; font-weight: 650; color: #0f4d42; }
+  .steps { counter-reset: step; margin: 3mm 0 0; padding: 0; list-style: none; }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 0 0 2.6mm 8mm;
+    font-size: 7.5pt;
+    line-height: 1.4;
+    color: #39544c;
+    border-left: .6pt solid #c8dfd8;
+    margin-left: 2.2mm;
+  }
+  .steps li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: -2.4mm;
+    top: 0;
+    width: 4.6mm;
+    height: 4.6mm;
+    border-radius: 50%;
+    background: var(--teal);
+    color: #fff;
+    font-size: 5.8pt;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .steps b { color: #0f4b40; }
+  .checklist { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5mm 5mm; margin-top: 2mm; }
+  .check { font-size: 7pt; color: #3e5951; line-height: 1.4; }
+  .check::before { content: "✓"; color: var(--teal); font-weight: 800; margin-right: 1.5mm; }
+  .code {
+    background: #0a211d;
+    color: #c9f4e8;
+    border-radius: 2mm;
+    padding: 2.6mm 3mm;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 6.5pt;
+    line-height: 1.5;
+    margin-top: 2mm;
+  }
+  .code .p { color: #5ee0c5; }
+</style>
+</head>
+<body>
+
+<!-- ============================ PORTADA ============================ -->
+<section class="page cover">
+  <div class="cover-top">
+    <div class="brandline">
+      <div class="brandmark">A</div>
+      <span>Analizador de Plagios</span>
+    </div>
+    <div>Avance 1 · Diseño de producto</div>
+  </div>
+
+  <div class="cover-main">
+    <div class="eyebrow">Auditoría académica local-first</div>
+    <h1>Analizador de Plagios para Entregas de Código C#</h1>
+    <div class="subtitle">De la similitud a una decisión académica fundamentada.</div>
+    <p class="desc">Aplicación web local para organizar grupos, comparar entregas, revisar señales de generación automática y documentar la defensa oral sin enviar datos a la nube.</p>
+    <div class="badges">
+      <span class="badge">.NET 10</span>
+      <span class="badge">Blazor Server</span>
+      <span class="badge">EF Core + SQLite</span>
+      <span class="badge">Roslyn</span>
+      <span class="badge">Tesseract OCR</span>
+    </div>
+  </div>
+
+  <div class="cover-score">
+    <div class="label">Evidencia de esta corrida</div>
+    <div class="value">93.1<span>%</span></div>
+    <div class="meta">similitud estructural · referencia Ana Pérez</div>
+    <div class="bar"><i style="width:93.1%"></i></div>
+    <div class="mini-label"><span>0%</span><span>100%</span></div>
+  </div>
+
+  <div class="cover-bottom">
+    <div><span>Modalidad</span><strong>Web local-first</strong></div>
+    <div><span>Documento</span><strong>Pantallas · 3FN · Arquitectura</strong></div>
+    <div><span>Fecha</span><strong>Octubre 2026</strong></div>
+  </div>
+</section>
+
+<!-- ============================ PROYECTO ============================ -->
+<section class="page">
+  <div class="kicker">01 · Proyecto</div>
+  <h2>Nombre y descripción</h2>
+  <p class="lead">Una herramienta de apoyo a la revisión académica: conserva la evidencia, ordena el análisis y deja la decisión final en manos del docente.</p>
+
+  <div class="project-grid">
+    <div>
+      <div class="name-box">
+        <div class="tag">Nombre del proyecto</div>
+        <h3>Analizador de Plagios para Entregas de Código C#</h3>
+        <p>Auditoría local-first de similitud y asistencia en código académico.</p>
+      </div>
+
+      <div class="project-copy">
+        <h3>El problema</h3>
+        <p>Revisar decenas de entregas de programación a mano es lento y difícil de justificar. Dos archivos pueden verse distintos y conservar la misma estructura; además, el código asistido por IA mezcla estilo, comentarios y patrones que no siempre se ven a simple vista. El docente necesita <strong>evidencia trazable</strong>, no una acusación automática.</p>
+
+        <h3>Qué hace la aplicación</h3>
+        <p>Organiza grupos y estudiantes por año, ciclo y cómputo; importa listas desde CSV; compara entregas <strong>.cs</strong>, texto o capturas de pantalla; calcula similitud estructural; muestra un diff lado a lado; agrega señales explicables de generación automática; genera una ficha de defensa oral; guarda observaciones y permite comparar la evolución entre periodos.</p>
+
+        <h3>Valor para el usuario</h3>
+        <ul class="bullets">
+          <li><strong>Menos revisión repetitiva:</strong> prioriza las entregas que requieren atención y conserva la referencia de cada comparación.</li>
+          <li><strong>Decisiones defendibles:</strong> cada porcentaje viene con desglose, diff, metadatos y preguntas de defensa.</li>
+          <li><strong>Menos sesgo:</strong> el modo a ciegas oculta nombres y carnets mientras se revisa la evidencia.</li>
+          <li><strong>Privacidad por diseño:</strong> la base SQLite, los archivos y el historial permanecen en el equipo local.</li>
+        </ul>
+
+        <h3>Alcance de este avance</h3>
+        <p class="small">Seis pantallas principales: Inicio, Grupos, Analizar, Resultados, Detalle e Histórico. Incluye importación CSV, respaldo/restauración de grupos, OCR para capturas, comparación directa o contra el corpus, ficha de defensa y exportación CSV. No incluye integración con LMS, autenticación multiusuario ni sanción automática.</p>
+      </div>
+    </div>
+
+    <aside>
+      <div class="side-card">
+        <h3>Ficha rápida</h3>
+        <div class="fact"><span>Tipo</span><b>Web app local</b></div>
+        <div class="fact"><span>Usuario</span><b>Docente / coordinador</b></div>
+        <div class="fact"><span>Stack</span><b>.NET 10 · Blazor · SQLite</b></div>
+        <div class="fact"><span>Entrada</span><b>.cs, .txt, imágenes</b></div>
+        <div class="fact"><span>Salida</span><b>Evidencia + historial</b></div>
+        <div class="fact"><span>Principio</span><b>La herramienta sugiere; el docente decide</b></div>
+      </div>
+
+      <div class="side-card">
+        <h3>Contenido</h3>
+        <ul class="toc">
+          <li><span>01 · Proyecto</span><b>02</b></li>
+          <li><span>02 · Flujo de pantallas</span><b>03</b></li>
+          <li><span>03 · Pantallas y lógica</span><b>04–09</b></li>
+          <li><span>04 · Base de datos y 3FN</span><b>10–11</b></li>
+          <li><span>05 · Arquitectura y cierre</span><b>12–13</b></li>
+        </ul>
+      </div>
+
+      <div class="principle">
+        <strong>Regla de producto:</strong> la similitud y la probabilidad de IA son señales para revisar. Nunca reemplazan la entrevista, el contexto del curso ni el criterio del docente.
+      </div>
+    </aside>
+  </div>
+
+  <div class="rubric-strip">
+    <div><span>Nombre</span><b>Portada y ficha · 01</b></div>
+    <div><span>Descripción</span><b>Problema, alcance y valor · 02</b></div>
+    <div><span>Pantallas + lógica</span><b>Seis recorridos · 03–09</b></div>
+    <div><span>Base de datos 3FN</span><b>Diagrama y diccionario · 10–11</b></div>
+    <div><span>Arquitectura</span><b>Capas y stack · 12–13</b></div>
+  </div>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Nombre y descripción</span><span class="pnum">02</span></div>
+</section>
+
+<!-- ============================ FLUJO ============================ -->
+<section class="page">
+  <div class="kicker">02 · Experiencia</div>
+  <h2>Flujo de pantallas</h2>
+  <p class="lead">El recorrido replica el trabajo real: preparar el grupo, cargar la entrega, revisar la evidencia, defenderla y comparar periodos. Cada pantalla tiene una salida concreta hacia la siguiente.</p>
+
+  <div class="flow">
+    <div class="flow-step"><div class="n">1</div><h4>Inicio</h4><p>Panorama, alertas y actividad reciente.</p></div>
+    <div class="flow-arrow">›</div>
+    <div class="flow-step"><div class="n">2</div><h4>Grupos</h4><p>Periodo, estudiantes y CSV.</p></div>
+    <div class="flow-arrow">›</div>
+    <div class="flow-step"><div class="n">3</div><h4>Analizar</h4><p>Entrega A + referencia B o corpus.</p></div>
+    <div class="flow-arrow">›</div>
+    <div class="flow-step"><div class="n">4</div><h4>Resultados</h4><p>Filtros, riesgo y priorización.</p></div>
+    <div class="flow-arrow">›</div>
+    <div class="flow-step"><div class="n">5</div><h4>Detalle</h4><p>Diff, IA, quiz y observaciones.</p></div>
+    <div class="flow-arrow">›</div>
+    <div class="flow-step"><div class="n">6</div><h4>Histórico</h4><p>Tendencias por estudiante y cómputo.</p></div>
+  </div>
+
+  <div class="flow-note">
+    <span class="pill">Modo a ciegas</span>
+    <span>Disponible en las pantallas de revisión: oculta identidad para evaluar primero la evidencia.</span>
+  </div>
+
+  <table class="table">
+    <thead>
+      <tr><th style="width:20%">Pantalla</th><th style="width:43%">Objetivo</th><th>Evidencia / salida</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><b>Inicio</b></td><td>Responder “¿qué está pasando?” en segundos.</td><td>Métricas, alertas ≥ 60%, actividad reciente y distribución por cómputo.</td></tr>
+      <tr><td><b>Grupos</b></td><td>Preparar el periodo y la lista de estudiantes.</td><td>Grupo, estudiantes, importación CSV validada, respaldo y restauración.</td></tr>
+      <tr><td><b>Analizar</b></td><td>Cargar una entrega y decidir contra qué compararla.</td><td>Evaluaciones guardadas, historial y advertencias de OCR o duplicados.</td></tr>
+      <tr><td><b>Resultados</b></td><td>Priorizar lo que necesita revisión.</td><td>Tabla filtrable, promedios, niveles de riesgo y exportación CSV.</td></tr>
+      <tr><td><b>Detalle</b></td><td>Entender y documentar un resultado.</td><td>Diff, desglose de similitud, señales IA, quiz de defensa y observaciones.</td></tr>
+      <tr><td><b>Histórico</b></td><td>Ver evolución sin mezclar periodos.</td><td>Series por cómputo, seguimiento por carnet y ejecuciones recientes.</td></tr>
+      <tr><td><b>CSV / respaldo</b></td><td>Subflujo dentro de Grupos.</td><td>Previsualización con filas válidas e inválidas; respaldo JSON del grupo.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rules">
+    <div class="rule"><h4>Local-first</h4><p>SQLite y archivos viven en el equipo. No hay servicios externos ni envío de entregas.</p></div>
+    <div class="rule"><h4>Sin veredicto automático</h4><p>La probabilidad de IA es una señal heurística explicable, no una prueba de fraude.</p></div>
+    <div class="rule"><h4>Trazabilidad</h4><p>La evaluación guarda referencia, métricas, fecha, archivo y hashes para poder volver a la evidencia.</p></div>
+  </div>
+
+  <h3 style="margin-top:5mm;">Estados que la interfaz debe resolver</h3>
+  <table class="table">
+    <thead><tr><th style="width:18%">Estado</th><th style="width:48%">Comportamiento</th><th>Regla de recuperación</th></tr></thead>
+    <tbody>
+      <tr><td><b>Sin datos</b></td><td>Métricas en cero, mensaje contextual y acción para crear el primer grupo o análisis.</td><td>Nunca mostrar una tabla vacía sin explicación.</td></tr>
+      <tr><td><b>Procesando</b></td><td>Botón deshabilitado, progreso visible y bloqueo de doble envío.</td><td>El usuario puede cancelar sin dejar una evaluación a medias.</td></tr>
+      <tr><td><b>Error de archivo</b></td><td>Mensaje concreto: formato, tamaño, OCR o texto vacío.</td><td>Reintentar o cambiar el archivo sin perder el contexto del grupo.</td></tr>
+      <tr><td><b>Duplicado</b></td><td>Advertencia, no bloqueo: el mismo hash puede ser una nueva corrida legítima.</td><td>Se conserva la evaluación y se explica la decisión.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Flujo de pantallas</span><span class="pnum">03</span></div>
+</section>
+
+<!-- ============================ INICIO ============================ -->
+<section class="page">
+  <div class="kicker">03 · Pantallas y lógica</div>
+  <h2>3.1 Inicio: panorama y prioridades</h2>
+  <p class="lead">Responde en segundos cuántos grupos y entregas hay, qué tan alto es el riesgo acumulado y cuál es la siguiente acción recomendada.</p>
+
+  <figure class="shot">
+    <img src="img/01-inicio.png" alt="Pantalla de Inicio del analizador con métricas y actividad reciente">
+    <figcaption><span><b>Captura real</b> · datos de demostración</span><span>Ruta / · 1440 × 1200</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div>
+      <h3>Qué muestra</h3>
+      <ul>
+        <li>Métricas globales: grupos activos, entregas analizadas, alertas altas y cobertura de defensa.</li>
+        <li>Tarjeta de evidencia con similitud media y probabilidad de IA media, ambas calculadas sobre las evaluaciones guardadas.</li>
+        <li>Actividad reciente ordenada por fecha, con acceso directo al detalle de cada resultado.</li>
+        <li>Distribución por cómputo y accesos rápidos para empezar un análisis o gestionar grupos.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>Consulta agregada de grupos, estudiantes, evaluaciones e historiales; los promedios usan <code>AVG</code> y devuelven 0 cuando no hay datos.</li>
+        <li>Una “alerta alta” es una evaluación con similitud o probabilidad de IA ≥ 60%. El umbral se muestra en la propia tarjeta.</li>
+        <li>Los estados vacíos invitan a crear el primer grupo; las métricas nunca muestran “NaN” ni divisiones por cero.</li>
+        <li>El modo a ciegas oculta identidades en las listas de revisión sin alterar los cálculos.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout"><b>Decisión de diseño:</b> la portada no es un dashboard decorativo. Cada tarjeta responde a una pregunta de revisión y termina en una acción: ver resultados, abrir una entrega o iniciar un análisis.</div>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Pantalla · Inicio</span><span class="pnum">04</span></div>
+</section>
+
+<!-- ============================ GRUPOS ============================ -->
+<section class="page">
+  <div class="kicker">03 · Pantallas y lógica</div>
+  <h2>3.2 Grupos: periodo, estudiantes y CSV</h2>
+  <p class="lead">El grupo es la unidad de contexto. Sin periodo y lista correctos, cualquier comparación posterior pierde sentido.</p>
+
+  <figure class="shot">
+    <img src="img/02-grupos.png" alt="Pantalla de Grupos con dos grupos y acciones de gestión">
+    <figcaption><span><b>Captura real</b> · datos de demostración</span><span>Ruta /grupos · 1440 × 620</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div>
+      <h3>Qué muestra</h3>
+      <ul>
+        <li>Tarjetas por grupo con código, año, ciclo, cómputo, estudiantes, entregas y promedios de similitud e IA.</li>
+        <li>Búsqueda por nombre o código y filtros por cómputo, ciclo y año, combinables con “Limpiar”.</li>
+        <li>Acciones: expandir estudiantes, analizar, descargar respaldo, editar y eliminar con confirmación.</li>
+        <li>Subflujo CSV: encabezados <code>carnet,nombre,correo</code>, separadores coma, punto y coma o tabulador, previsualización por fila y estados <b>VÁLIDA / INVÁLIDA</b>.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>Nombre 2–120 caracteres; código 2–40; año 2000–2100; cómputo 1–3; correo con formato válido si se informa.</li>
+        <li>El código de grupo es único por <b>(Código, Año, Ciclo, Cómputo)</b>; el carnet es único dentro del grupo.</li>
+        <li>La importación valida antes de escribir: las filas inválidas se omiten y se informa cuántas se importaron.</li>
+        <li>Eliminar un grupo elimina en cascada estudiantes, evaluaciones e historiales, y limpia los archivos asociados.</li>
+        <li>El respaldo permite mover un grupo completo con su historial entre equipos sin depender de la nube.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="csvbox">
+    <div><span class="ok">2</span> 20240006  Daniela Torres      daniela@ejemplo.com   <span class="ok">VÁLIDA</span></div>
+    <div><span class="ok">3</span> 20240007  Andrés Ramírez      andres@ejemplo.com    <span class="ok">VÁLIDA</span></div>
+    <div><span class="bad">6</span>           Sin Carnet           sin@ejemplo.com       <span class="bad">INVÁLIDA</span> · El carnet debe tener al menos 2 caracteres.</div>
+  </div>
+
+  <div class="rules" style="margin-top:4mm;">
+    <div class="rule"><h4>Formato</h4><p>Encabezado <b>carnet,nombre,correo</b>; coma, punto y coma o tabulador; codificación UTF-8 recomendada.</p></div>
+    <div class="rule"><h4>Validación por fila</h4><p>Se revisan carnet, nombre, correo y duplicados dentro del archivo antes de escribir en la base.</p></div>
+    <div class="rule"><h4>Resultado</h4><p>Se informa cuántos se importaron y cuántos se omitieron; nunca se detiene toda la carga por una fila mala.</p></div>
+  </div>
+  <div class="callout" style="margin-top:3mm;"><b>Respaldo:</b> el grupo se exporta como JSON con estudiantes, evaluaciones e historial. La restauración conserva la trazabilidad y permite mover el trabajo entre equipos sin nube.</div>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Pantalla · Grupos</span><span class="pnum">05</span></div>
+</section>
+
+<!-- ============================ ANALIZAR ============================ -->
+<section class="page">
+  <div class="kicker">03 · Pantallas y lógica</div>
+  <h2>3.3 Analizar: una entrega, dos caminos</h2>
+  <p class="lead">La misma pantalla permite comparar dos entregas entre sí o buscar la mejor coincidencia dentro de todo el corpus del grupo.</p>
+
+  <figure class="shot">
+    <img src="img/03-analizar.png" alt="Pantalla para cargar entregas y ejecutar el análisis">
+    <figcaption><span><b>Captura real</b> · datos de demostración</span><span>Ruta /analisis · 1440 × 860</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div>
+      <h3>Qué muestra</h3>
+      <ul>
+        <li>Selección de grupo y de estudiante A; estudiante B opcional para comparación directa.</li>
+        <li>Zonas de carga con arrastrar y soltar para <b>.cs</b>, <b>.txt</b> e imágenes; máximo 10 MB por archivo.</li>
+        <li>Opciones explícitas: comparación directa A↔B y guardar en historial y tendencias.</li>
+        <li>Indicadores del método: 55% Levenshtein de tokens, 25% Jaccard de shingles, 20% Levenshtein de líneas.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>Grupo y estudiante A son obligatorios; si se elige B, debe ser un estudiante distinto del mismo grupo.</li>
+        <li>La imagen se procesa con OCR y se advierte la confianza obtenida; el texto reconocido se normaliza antes de comparar.</li>
+        <li>El código se normaliza y se analiza con Roslyn (métodos, bucles, condicionales) sin ejecutarlo.</li>
+        <li>La evaluación y su historial se guardan en una transacción; si algo falla, se eliminan los archivos temporales.</li>
+        <li>Un hash SHA-256 repetido para el mismo estudiante genera advertencia, no bloqueo: puede ser una nueva corrida legítima.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="formula">
+    <div><b>55%</b><span>Levenshtein de tokens normalizados</span></div>
+    <div><b>25%</b><span>Jaccard de shingles de 4 tokens</span></div>
+    <div><b>20%</b><span>Levenshtein a nivel de líneas</span></div>
+  </div>
+
+  <div class="callout"><b>Riesgo estructural:</b> ≥ 80% crítico · ≥ 60% alto · ≥ 35% medio · &lt; 35% bajo. Es una guía de priorización, no una sentencia.</div>
+
+  <div class="mini-strip">
+    <div><b>Entradas</b>Código .cs, texto .txt o captura de pantalla procesada por OCR.</div>
+    <div><b>Límite</b>10 MB por archivo; se avisa si el diff se truncó por tamaño.</div>
+    <div><b>Salida</b>Evaluación guardada, referencia e historial listos para revisar.</div>
+  </div>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Pantalla · Analizar</span><span class="pnum">06</span></div>
+</section>
+
+<!-- ============================ RESULTADOS ============================ -->
+<section class="page">
+  <div class="kicker">03 · Pantallas y lógica</div>
+  <h2>3.4 Resultados: priorizar la revisión</h2>
+  <p class="lead">Una tabla operativa para encontrar rápido lo que merece atención, sin perder de vista los promedios del curso.</p>
+
+  <figure class="shot">
+    <img src="img/04-resultados.png" alt="Pantalla de Resultados con métricas, filtros y tabla de evaluaciones">
+    <figcaption><span><b>Captura real</b> · datos de demostración</span><span>Ruta /resultados · 1440 × 1080</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div>
+      <h3>Qué muestra</h3>
+      <ul>
+        <li>Cuatro indicadores: entregas analizadas, similitud media, probabilidad de IA media y alertas altas.</li>
+        <li>Búsqueda libre por estudiante, carnet, archivo o grupo, y filtros por grupo, cómputo y nivel de riesgo.</li>
+        <li>Tabla con estudiante, archivo, grupo, similitud, IA, nivel, fecha y acceso a “Abrir”.</li>
+        <li>Exportación CSV y acceso directo a un nuevo análisis; paginación cuando hay más de una página.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>La consulta combina evaluación, estudiante y grupo; aplica filtros antes de calcular el total y los promedios.</li>
+        <li>Los niveles se colorean de forma consistente con los umbrales del motor: crítico, alto, medio y bajo.</li>
+        <li>El modo a ciegas oculta nombres y carnets en la tabla, pero mantiene la trazabilidad interna por IDs.</li>
+        <li>Sin resultados se muestra un estado vacío con acción para limpiar filtros o iniciar un análisis.</li>
+        <li>La exportación refleja el conjunto filtrado, no solo la página visible.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout"><b>Lectura rápida:</b> la tabla no ordena por “culpabilidad”. Ordena por fecha de análisis y deja que el docente combine similitud, IA y contexto del curso.</div>
+
+  <div class="risk-row">
+    <div class="risk-chip crit"><b>Crítico</b><span>≥ 80% · revisar primero</span></div>
+    <div class="risk-chip alto"><b>Alto</b><span>60–79% · evidencia directa</span></div>
+    <div class="risk-chip medio"><b>Medio</b><span>35–59% · contexto</span></div>
+    <div class="risk-chip bajo"><b>Bajo</b><span>&lt; 35% · seguimiento</span></div>
+  </div>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Pantalla · Resultados</span><span class="pnum">07</span></div>
+</section>
+
+<!-- ============================ DETALLE ============================ -->
+<section class="page">
+  <div class="kicker">03 · Pantallas y lógica</div>
+  <h2>3.5 Detalle: evidencia para decidir</h2>
+  <p class="lead">El corazón del producto: explicar el porcentaje, mostrar el diff, separar las señales de IA y preparar la defensa oral.</p>
+
+  <figure class="shot tall">
+    <img src="img/05-detalle.png" alt="Pantalla de detalle con resumen, señales de IA, observaciones, quiz y código">
+    <figcaption><span><b>Captura real</b> · evaluación #2, datos de demostración</span><span>Ruta /resultados/2 · 1440 × 1800</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div>
+      <h3>Qué muestra</h3>
+      <ul>
+        <li>Resumen: archivo, estudiante, grupo, periodo, líneas, nivel de riesgo, similitud e IA.</li>
+        <li>Pestañas de <b>Resumen</b>, <b>Diff</b>, <b>Metadatos</b> y <b>Quiz de defensa</b>.</li>
+        <li>Desglose de similitud y referencia comparada; señales de IA con puntos y evidencia textual.</li>
+        <li>Observaciones del docente, ficha de defensa, descarga y versión imprimible.</li>
+        <li>Código analizado y métricas estructurales (líneas, métodos, bucles, condicionales).</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>Carga la evaluación y su referencia; deserializa los JSON de similitud, IA y metadatos para reconstruir la evidencia.</li>
+        <li>El diff se genera con la matriz de Levenshtein y resalta líneas iguales, modificadas y añadidas.</li>
+        <li>Las observaciones se limitan a 1200 caracteres y quedan asociadas a la evaluación y al respaldo.</li>
+        <li>El quiz se deriva de la estructura del código; las preguntas son una ayuda para la entrevista, no una prueba automática.</li>
+        <li>Si el ID no existe o la referencia fue eliminada, se muestra un estado seguro sin romper la pantalla.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Pantalla · Detalle</span><span class="pnum">08</span></div>
+</section>
+
+<!-- ============================ HISTÓRICO ============================ -->
+<section class="page">
+  <div class="kicker">03 · Pantallas y lógica</div>
+  <h2>3.6 Histórico: evolución sin mezclar periodos</h2>
+  <p class="lead">La identidad se sigue por carnet, pero los periodos se mantienen separados. Así se puede ver una tendencia sin comparar contextos incompatibles.</p>
+
+  <figure class="shot mid">
+    <img src="img/06-historico.png" alt="Pantalla de Histórico con filtros, gráfico por cómputo y ejecuciones recientes">
+    <figcaption><span><b>Captura real</b> · datos de demostración</span><span>Ruta /historico · 1440 × 1350</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div>
+      <h3>Qué muestra</h3>
+      <ul>
+        <li>Indicadores: ejecuciones registradas, similitud media, probabilidad de IA media y estudiantes seguidos.</li>
+        <li>Filtros por estudiante, ciclo, año y cómputo; búsqueda por nombre o carnet.</li>
+        <li>Gráfico de evolución global por cómputo y panel de lectura de la tendencia.</li>
+        <li>Ejecuciones recientes con periodo, origen, similitud, IA y acceso al resultado.</li>
+        <li>Cobertura del historial por cómputo para detectar periodos sin datos.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lógica y validaciones</h3>
+      <ul>
+        <li>El histórico guarda una instantánea de cada ejecución; no se recalcula al abrir la pantalla.</li>
+        <li>Los filtros se combinan y actualizan métricas, gráfico y tabla en la misma consulta.</li>
+        <li>El seguimiento por carnet permite encontrar al mismo estudiante en grupos y cómputos distintos.</li>
+        <li>Los periodos sin datos se muestran en cero; no se interpolan valores ni se mezclan ciclos.</li>
+        <li>La exportación CSV usa el conjunto filtrado para que el docente pueda anexarlo a su revisión.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout"><b>Por qué importa la instantánea:</b> si el grupo cambia de nombre o de periodo, el historial debe conservar el contexto en el que se tomó la decisión. Esa trazabilidad es parte del valor académico.</div>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Pantalla · Histórico</span><span class="pnum">09</span></div>
+</section>
+
+<!-- ============================ BASE DE DATOS ============================ -->
+<section class="page">
+  <div class="kicker">04 · Datos</div>
+  <h2>Modelo relacional en 3FN</h2>
+  <p class="lead">Cuatro tablas, claves simples y relaciones explícitas. Los índices responden a las consultas reales: periodo, estudiante, riesgo y fecha.</p>
+
+  <svg class="db-svg" viewBox="0 0 1000 610" role="img" aria-label="Diagrama entidad-relación de las cuatro tablas">
+    <defs>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0b2c26" flood-opacity=".14"/>
+      </filter>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b9b8e"/>
+      </marker>
+    </defs>
+
+    <!-- Grupos -->
+    <g filter="url(#shadow)">
+      <rect x="24" y="44" width="252" height="190" rx="10" fill="#ffffff" stroke="#b9d6d0"/>
+      <path d="M24 54 Q24 44 34 44 H266 Q276 44 276 54 V82 H24 Z" fill="#0b3d35"/>
+      <text x="40" y="68" font-family="Segoe UI, Arial" font-size="15" font-weight="700" fill="#e9fbf6">Grupos</text>
+      <text x="252" y="68" text-anchor="end" font-family="Segoe UI, Arial" font-size="9" fill="#7ae2cd">periodo</text>
+      <text x="40" y="105" font-family="Consolas, monospace" font-size="11" fill="#0d5f54" font-weight="700">Id · PK</text>
+      <text x="40" y="126" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Nombre</text>
+      <text x="40" y="147" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Codigo</text>
+      <text x="40" y="168" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Anio · Ciclo · Computo</text>
+      <text x="40" y="189" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Descripcion</text>
+      <text x="40" y="210" font-family="Consolas, monospace" font-size="11" fill="#3b544d">CreadoEn</text>
+    </g>
+
+    <!-- Estudiantes -->
+    <g filter="url(#shadow)">
+      <rect x="374" y="44" width="250" height="190" rx="10" fill="#ffffff" stroke="#b9d6d0"/>
+      <path d="M374 54 Q374 44 384 44 H614 Q624 44 624 54 V82 H374 Z" fill="#0b3d35"/>
+      <text x="390" y="68" font-family="Segoe UI, Arial" font-size="15" font-weight="700" fill="#e9fbf6">Estudiantes</text>
+      <text x="602" y="68" text-anchor="end" font-family="Segoe UI, Arial" font-size="9" fill="#7ae2cd">persona</text>
+      <text x="390" y="105" font-family="Consolas, monospace" font-size="11" fill="#0d5f54" font-weight="700">Id · PK</text>
+      <text x="390" y="126" font-family="Consolas, monospace" font-size="11" fill="#9a5a16">GrupoId · FK</text>
+      <text x="390" y="147" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Carnet</text>
+      <text x="390" y="168" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Nombre</text>
+      <text x="390" y="189" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Correo</text>
+      <text x="390" y="210" font-family="Consolas, monospace" font-size="11" fill="#3b544d">CreadoEn</text>
+    </g>
+
+    <!-- Evaluaciones -->
+    <g filter="url(#shadow)">
+      <rect x="374" y="334" width="282" height="244" rx="10" fill="#ffffff" stroke="#b9d6d0"/>
+      <path d="M374 344 Q374 334 384 334 H646 Q656 334 656 344 V372 H374 Z" fill="#0b3d35"/>
+      <text x="390" y="358" font-family="Segoe UI, Arial" font-size="15" font-weight="700" fill="#e9fbf6">Evaluaciones</text>
+      <text x="634" y="358" text-anchor="end" font-family="Segoe UI, Arial" font-size="9" fill="#7ae2cd">evidencia</text>
+      <text x="390" y="394" font-family="Consolas, monospace" font-size="11" fill="#0d5f54" font-weight="700">Id · PK</text>
+      <text x="390" y="415" font-family="Consolas, monospace" font-size="11" fill="#9a5a16">GrupoId · FK</text>
+      <text x="390" y="436" font-family="Consolas, monospace" font-size="11" fill="#9a5a16">EstudianteId · FK</text>
+      <text x="390" y="457" font-family="Consolas, monospace" font-size="11" fill="#9a5a16">ReferenciaEvaluacionId · FK</text>
+      <text x="390" y="478" font-family="Consolas, monospace" font-size="11" fill="#3b544d">NombreArchivo · HashSha256</text>
+      <text x="390" y="499" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Similitud · ProbabilidadIA</text>
+      <text x="390" y="520" font-family="Consolas, monospace" font-size="11" fill="#3b544d">NivelRiesgo · FechaAnalisis</text>
+      <text x="390" y="541" font-family="Consolas, monospace" font-size="10" fill="#7b8e88">JSON: similitud · IA · metadatos</text>
+    </g>
+
+    <!-- Historiales -->
+    <g filter="url(#shadow)">
+      <rect x="716" y="300" width="260" height="278" rx="10" fill="#ffffff" stroke="#b9d6d0"/>
+      <path d="M716 310 Q716 300 726 300 H966 Q976 300 976 310 V338 H716 Z" fill="#0b3d35"/>
+      <text x="732" y="324" font-family="Segoe UI, Arial" font-size="15" font-weight="700" fill="#e9fbf6">Historiales</text>
+      <text x="954" y="324" text-anchor="end" font-family="Segoe UI, Arial" font-size="9" fill="#7ae2cd">serie</text>
+      <text x="732" y="360" font-family="Consolas, monospace" font-size="11" fill="#0d5f54" font-weight="700">Id · PK</text>
+      <text x="732" y="381" font-family="Consolas, monospace" font-size="11" fill="#9a5a16">EvaluacionId · FK</text>
+      <text x="732" y="402" font-family="Consolas, monospace" font-size="11" fill="#9a5a16">EstudianteId · FK</text>
+      <text x="732" y="423" font-family="Consolas, monospace" font-size="11" fill="#9a5a16">GrupoId · FK</text>
+      <text x="732" y="444" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Computo · Anio · Ciclo</text>
+      <text x="732" y="465" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Similitud · ProbabilidadIA</text>
+      <text x="732" y="486" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Origen · Resumen</text>
+      <text x="732" y="507" font-family="Consolas, monospace" font-size="11" fill="#3b544d">Fecha</text>
+      <text x="732" y="536" font-family="Segoe UI, Arial" font-size="9" fill="#7b8e88">Instantánea del periodo</text>
+    </g>
+
+    <!-- Relations -->
+    <line x1="276" y1="140" x2="374" y2="140" stroke="#5b9b8e" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <text x="325" y="132" text-anchor="middle" font-family="Segoe UI, Arial" font-size="10" font-weight="700" fill="#0f6b5d">1:N</text>
+
+    <line x1="499" y1="234" x2="499" y2="334" stroke="#5b9b8e" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <text x="510" y="288" font-family="Segoe UI, Arial" font-size="10" font-weight="700" fill="#0f6b5d">1:N</text>
+
+    <path d="M150 234 L150 300 L374 300 L374 405" fill="none" stroke="#5b9b8e" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+    <text x="255" y="291" font-family="Segoe UI, Arial" font-size="9" font-weight="700" fill="#4d887c">1:N</text>
+
+    <line x1="656" y1="455" x2="716" y2="455" stroke="#5b9b8e" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <text x="686" y="447" text-anchor="middle" font-family="Segoe UI, Arial" font-size="10" font-weight="700" fill="#0f6b5d">1:N</text>
+
+    <path d="M624 145 L846 145 L846 300" fill="none" stroke="#5b9b8e" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+    <text x="854" y="226" font-family="Segoe UI, Arial" font-size="9" font-weight="700" fill="#4d887c">1:N</text>
+
+    <!-- self reference -->
+    <path d="M656 390 Q700 390 700 410 Q700 430 656 430" fill="none" stroke="#b7791f" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <text x="704" y="414" font-family="Segoe UI, Arial" font-size="8.5" fill="#9a6417">0..1</text>
+  </svg>
+
+  <div class="db-grid">
+    <div class="db-card">
+      <h3>Relaciones y cardinalidades</h3>
+      <div class="rel"><span>Grupo → Estudiantes</span><b>1 : N · cascade</b></div>
+      <div class="rel"><span>Grupo → Evaluaciones</span><b>1 : N · cascade</b></div>
+      <div class="rel"><span>Estudiante → Evaluaciones</span><b>1 : N · cascade</b></div>
+      <div class="rel"><span>Grupo / Estudiante / Evaluación → Historial</span><b>1 : N · cascade</b></div>
+      <div class="rel"><span>Evaluación → Evaluación de referencia</span><b>0..1 : N · set null</b></div>
+      <div class="rel"><span>Integridad</span><b>FK activas + transacciones</b></div>
+    </div>
+    <div class="db-card">
+      <h3>Índices que sostienen las consultas</h3>
+      <table class="idx">
+        <tr><td>IX_Grupos_Codigo_Anio_Ciclo_Computo</td><td>único · evita duplicar periodo</td></tr>
+        <tr><td>IX_Grupos_Anio_Ciclo</td><td>filtros de periodo</td></tr>
+        <tr><td>IX_Estudiantes_GrupoId_Carnet</td><td>único · carnet por grupo</td></tr>
+        <tr><td>IX_Estudiantes_Carnet</td><td>seguimiento entre grupos</td></tr>
+        <tr><td>IX_Evaluaciones_GrupoId_FechaAnalisis</td><td>actividad y resultados</td></tr>
+        <tr><td>IX_Evaluaciones_EstudianteId</td><td>historial por estudiante</td></tr>
+        <tr><td>IX_Evaluaciones_HashSha256</td><td>detección de duplicados</td></tr>
+        <tr><td>IX_Historiales_GrupoId_Computo</td><td>tendencias por periodo</td></tr>
+        <tr><td>IX_Historiales_EstudianteId_Fecha</td><td>serie individual</td></tr>
+      </table>
+      <p class="tiny" style="margin:2mm 0 0;">EF Core agrega índices para las FK no cubiertas, por ejemplo <code>ReferenciaEvaluacionId</code> y <code>EvaluacionId</code>.</p>
+    </div>
+  </div>
+
+  <div class="norm">
+    <div><b>PK simples y FK explícitas</b>Evitan claves compuestas innecesarias en las entidades operativas y permiten que las relaciones se lean sin ambigüedad.</div>
+    <div><b>Borrado en cascada</b>Eliminar un grupo no deja estudiantes, evaluaciones ni historiales huérfanos. La referencia entre evaluaciones usa <i>SetNull</i>.</div>
+  </div>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Base de datos · diagrama</span><span class="pnum">10</span></div>
+</section>
+
+<!-- ============================ 3FN + DICCIONARIO ============================ -->
+<section class="page">
+  <div class="kicker">04 · Datos</div>
+  <h2>3FN y diccionario de datos</h2>
+  <p class="lead">Cada atributo no clave depende de la clave de su tabla. La única excepción documentada es la instantánea de periodo en el historial, necesaria para auditoría.</p>
+
+  <div class="norm" style="grid-template-columns: 1.1fr .95fr; margin-top: 3mm;">
+    <div><b>Grupos · Estudiantes · Evaluaciones</b>Poseen PK simple (<code>Id</code>); todos los atributos describen esa fila. En Estudiantes, <code>(GrupoId, Carnet)</code> es clave candidata y se protege con índice único; el nombre y el correo dependen del estudiante, no solo del grupo. En Evaluaciones, las métricas y los JSON dependen de la evaluación; GrupoId y EstudianteId son claves foráneas, no atributos derivados.</div>
+    <div><b>Historiales · instantánea controlada</b>Además de la PK, conserva <code>Computo</code>, <code>Anio</code> y <code>Ciclo</code> como copia inmutable del periodo en el momento del análisis. Es una desnormalización intencional para que editar un grupo no reescriba la historia. No se usa para calcular la integridad actual; se documenta y se escribe una sola vez.</div>
+  </div>
+
+  <div class="dict-grid">
+    <div class="dict">
+      <h4>Grupos <span>8 campos</span></h4>
+      <ul>
+        <li><span class="pk">PK</span><code>Id</code> <span class="type">int</span></li>
+        <li><code>Nombre</code> <span class="type">nvarchar(120)</span></li>
+        <li><code>Codigo</code> <span class="type">nvarchar(40)</span></li>
+        <li><code>Anio</code> <span class="type">int · 2000–2100</span></li>
+        <li><code>Ciclo</code> <span class="type">nvarchar(30)</span></li>
+        <li><code>Computo</code> <span class="type">int · 1–3</span></li>
+        <li><code>Descripcion</code> <span class="type">nvarchar(400) · null</span></li>
+        <li><code>CreadoEn</code> <span class="type">datetime · UTC</span></li>
+      </ul>
+    </div>
+
+    <div class="dict">
+      <h4>Estudiantes <span>6 campos</span></h4>
+      <ul>
+        <li><span class="pk">PK</span><code>Id</code> <span class="type">int</span></li>
+        <li><span class="fk">FK</span><code>GrupoId</code> <span class="type">int → Grupos</span></li>
+        <li><code>Carnet</code> <span class="type">nvarchar(40)</span></li>
+        <li><code>Nombre</code> <span class="type">nvarchar(160)</span></li>
+        <li><code>Correo</code> <span class="type">nvarchar(180) · null</span></li>
+        <li><code>CreadoEn</code> <span class="type">datetime · UTC</span></li>
+      </ul>
+    </div>
+
+    <div class="dict">
+      <h4>Evaluaciones <span>26 campos</span></h4>
+      <ul>
+        <li><span class="pk">PK</span><code>Id</code> <span class="type">int</span></li>
+        <li><span class="fk">FK</span><code>GrupoId</code> · <span class="fk">FK</span><code>EstudianteId</code> <span class="type">int</span></li>
+        <li><span class="fk">FK</span><code>ReferenciaEvaluacionId</code> <span class="type">int? · self</span></li>
+        <li><code>NombreArchivo</code> / <code>NombreAlmacenado</code> <span class="type">nvarchar</span></li>
+        <li><code>Extension</code> / <code>TipoContenido</code> <span class="type">nvarchar</span></li>
+        <li><code>TamanoBytes</code> <span class="type">bigint</span></li>
+        <li><code>HashSha256</code> <span class="type">nvarchar(64)</span></li>
+        <li><code>CodigoFuente</code> <span class="type">text</span></li>
+        <li><code>OrigenArchivo</code> / <code>ConfianzaOcr</code> <span class="type">nvarchar / double</span></li>
+        <li><code>LineasCodigo</code> / <code>Metodos</code> / <code>Bucles</code> / <code>Condicionales</code> <span class="type">int</span></li>
+        <li><code>Similitud</code> / <code>ProbabilidadIA</code> <span class="type">double · 0–100</span></li>
+        <li><code>NivelRiesgo</code> <span class="type">nvarchar(30)</span></li>
+        <li><code>FechaAnalisis</code> <span class="type">datetime · UTC</span></li>
+        <li><code>SimilitudReferencia</code> <span class="type">double</span></li>
+        <li><code>MetadatosJson</code> / <code>AnalisisIaJson</code> / <code>AnalisisSimilitudJson</code> <span class="type">json / text</span></li>
+        <li><code>Observaciones</code> <span class="type">nvarchar(1200) · null</span></li>
+      </ul>
+    </div>
+
+    <div class="dict">
+      <h4>Historiales <span>13 campos</span></h4>
+      <ul>
+        <li><span class="pk">PK</span><code>Id</code> <span class="type">int</span></li>
+        <li><span class="fk">FK</span><code>EvaluacionId</code> · <span class="fk">FK</span><code>EstudianteId</code> · <span class="fk">FK</span><code>GrupoId</code> <span class="type">int</span></li>
+        <li><code>Computo</code> / <code>Anio</code> <span class="type">int</span></li>
+        <li><code>Ciclo</code> <span class="type">nvarchar(30)</span></li>
+        <li><code>Similitud</code> / <code>ProbabilidadIA</code> <span class="type">double · 0–100</span></li>
+        <li><code>Origen</code> <span class="type">nvarchar(40)</span></li>
+        <li><code>Resumen</code> <span class="type">nvarchar(600) · null</span></li>
+        <li><code>ReferenciaEvaluacionId</code> <span class="type">int? · lógica</span></li>
+        <li><code>Fecha</code> <span class="type">datetime · UTC</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout" style="margin-top: 3mm;"><b>Lectura de normalización:</b> las tablas operativas están en 3FN; el historial conserva una copia del periodo como hecho histórico. Si se exigiera 3FN estricta, se eliminarían esas tres columnas y se uniría con Grupos, pero se perdería la fotografía del contexto original.</div>
+
+  <div class="deps">
+    <div><b>Dependencias funcionales principales</b><br>
+      <code>Grupos: Id → Nombre, Codigo, Anio, Ciclo, Computo, Descripcion, CreadoEn</code><br>
+      <code>Estudiantes: Id → GrupoId, Carnet, Nombre, Correo, CreadoEn</code><br>
+      <code>Evaluaciones: Id → GrupoId, EstudianteId, archivo, métricas, fecha, referencia</code><br>
+      <code>Historiales: Id → EvaluacionId, EstudianteId, GrupoId, periodo, métricas, fecha</code>
+    </div>
+    <div><b>Reglas de integridad</b><br>
+      · Un grupo no se repite para el mismo código, año, ciclo y cómputo.<br>
+      · El carnet es único dentro de un grupo.<br>
+      · Una evaluación siempre pertenece a un grupo y a un estudiante.<br>
+      · Al borrar el grupo se eliminan sus dependencias; la referencia entre evaluaciones queda en <i>NULL</i>.
+    </div>
+  </div>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Base de datos · 3FN y diccionario</span><span class="pnum">11</span></div>
+</section>
+
+<!-- ============================ ARQUITECTURA ============================ -->
+<section class="page">
+  <div class="kicker">05 · Arquitectura</div>
+  <h2>Arquitectura y tecnologías</h2>
+  <p class="lead">Una aplicación monolítica de Blazor Server, con capas claras y persistencia local. No hay API externa ni servicios en la nube: el circuito interactivo y el motor viven en el mismo equipo.</p>
+
+  <div class="arch-wrap">
+    <div class="arch-row">
+      <div class="arch-label">Cliente</div>
+      <div class="arch-box"><b>Navegador · circuito Blazor Server</b><br>Interfaz interactiva por SignalR; modo a ciegas y preferencias de UI. No recibe ni ejecuta el código analizado.</div>
+    </div>
+    <div class="arch-arrow">▼</div>
+    <div class="arch-row">
+      <div class="arch-label">Presentación</div>
+      <div class="arch-box"><b>Componentes Razor</b><br>Inicio · Grupos · Analizar · Resultados · Detalle · Histórico · not-found
+        <div class="chips"><span class="chip">Razor Components</span><span class="chip">Interactive Server</span><span class="chip">CSV / backup endpoints</span></div>
+      </div>
+    </div>
+    <div class="arch-arrow">▼</div>
+    <div class="arch-row">
+      <div class="arch-label">Aplicación</div>
+      <div class="arch-box"><b>Servicios de caso de uso</b><br><b>ServicioAnalisis</b> orquesta la corrida; <b>ImportadorEstudiantes</b> valida CSV; <b>GestorRespaldos</b> exporta/restaura; <b>GeneradorQuizDefensa</b> arma la entrevista.</div>
+    </div>
+    <div class="arch-arrow">▼</div>
+    <div class="arch-row">
+      <div class="arch-label">Dominio / análisis</div>
+      <div class="arch-box"><b>Motor explicable</b><br><b>NormalizadorCodigo</b> · <b>AnalizadorEstructura</b> (Roslyn) · <b>AnalizadorSimilitud</b> · <b>DetectorIAPatrones</b> · <b>LectorOCR</b> (Tesseract).
+        <div class="chips"><span class="chip">55/25/20</span><span class="chip">shingles 4</span><span class="chip">señales auditables</span></div>
+      </div>
+    </div>
+    <div class="arch-arrow">▼</div>
+    <div class="arch-row">
+      <div class="arch-label">Persistencia</div>
+      <div class="arch-box"><b>Infraestructura local</b><br>EF Core + SQLite (<code>sistema_plagio.db</code>), archivos en <code>App_Data/uploads</code>, metadatos forenses y configuración de límites.</div>
+    </div>
+  </div>
+
+  <div class="arch-side">
+    <div class="mini"><b>Frontera local-first</b>Todo el flujo ocurre dentro del equipo. El navegador solo transporta la interacción; no se envían entregas a un tercero.</div>
+    <div class="mini"><b>Persistencia transaccional</b>Evaluación e historial se guardan en una transacción. Si falla, se limpian los archivos temporales y no queda evidencia a medias.</div>
+  </div>
+
+  <table class="table stack-table" style="margin-top: 4mm;">
+    <thead><tr><th>Tecnología</th><th>Uso concreto en el proyecto</th></tr></thead>
+    <tbody>
+      <tr><td>.NET 10 / C#</td><td>Plataforma, tipado, asincronía y compilación con 0 warnings / 0 errores.</td></tr>
+      <tr><td>Blazor Server</td><td>Componentes interactivos, navegación y estado por circuito; sin SPA separada.</td></tr>
+      <tr><td>EF Core 10 + SQLite</td><td>Modelo, índices, relaciones, transacciones y consultas agregadas.</td></tr>
+      <tr><td>Microsoft.CodeAnalysis.CSharp</td><td>Análisis sintáctico de C# sin ejecutar el código del estudiante.</td></tr>
+      <tr><td>Tesseract 5.2</td><td>OCR local para capturas de pantalla; se informa la confianza obtenida.</td></tr>
+      <tr><td>HTML / CSS / SVG</td><td>Sistema visual, gráficos de barras y diagramas; sin dependencia de un framework gráfico externo.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rules" style="margin-top:4mm;">
+    <div class="rule"><h4>¿Por qué Blazor Server?</h4><p>Un solo despliegue y estado en servidor; no hace falta construir una API separada para seis pantallas interactivas.</p></div>
+    <div class="rule"><h4>¿Por qué SQLite?</h4><p>Base portable, sin instalación, con transacciones e índices suficientes para el volumen de un curso.</p></div>
+    <div class="rule"><h4>¿Por qué local-first?</h4><p>Las entregas son datos sensibles: se quedan en el equipo y el flujo funciona sin conexión a terceros.</p></div>
+  </div>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Arquitectura y tecnologías</span><span class="pnum">12</span></div>
+</section>
+
+<!-- ============================ CIERRE ============================ -->
+<section class="page">
+  <div class="kicker">05 · Arquitectura</div>
+  <h2>Flujo de una comparación y cierre</h2>
+  <p class="lead">Del archivo a la evidencia: cada paso deja un rastro verificable y termina en una decisión humana.</p>
+
+  <div class="db-grid" style="grid-template-columns: 1.05fr .95fr;">
+    <div>
+      <h3>Qué ocurre al pulsar “Ejecutar análisis”</h3>
+      <ol class="steps">
+        <li><b>Validar contexto:</b> grupo, estudiante A y, si existe, B distinto del mismo grupo.</li>
+        <li><b>Almacenar:</b> se guarda el archivo con nombre seguro y se calcula su SHA-256.</li>
+        <li><b>Leer:</b> decodificación de texto o OCR para imágenes; se advierte la confianza.</li>
+        <li><b>Normalizar y analizar:</b> tokens y líneas; Roslyn extrae métodos, bucles y condicionales.</li>
+        <li><b>Comparar:</b> Levenshtein de tokens, Jaccard de shingles y Levenshtein de líneas; se genera el diff.</li>
+        <li><b>Explicar:</b> el detector agrega señales de IA con evidencia y puntos; no emite veredicto.</li>
+        <li><b>Persistir:</b> evaluación, referencia e historial en una transacción; luego la UI muestra el resultado.</li>
+      </ol>
+    </div>
+
+    <div>
+      <h3>Decisiones que sostienen el diseño</h3>
+      <div class="side-card" style="padding: 3.5mm; margin-bottom: 2.5mm;">
+        <div class="fact"><span>Privacidad</span><b>Todo local; sin nube</b></div>
+        <div class="fact"><span>Sesgo</span><b>Modo a ciegas</b></div>
+        <div class="fact"><span>IA</span><b>Heurística explicable</b></div>
+        <div class="fact"><span>Decisión</span><b>Humana y documentada</b></div>
+      </div>
+      <p class="small"><b>Límites explícitos:</b> no hay autenticación multiusuario ni integración con LMS en este avance. La probabilidad de IA no es una prueba de fraude. El OCR puede equivocarse y se informa. Los porcentajes son una herramienta de priorización.</p>
+
+      <h3 style="margin-top: 4mm;">Estado del avance</h3>
+      <div class="checklist">
+        <div class="check">Compilación limpia</div>
+        <div class="check">Rutas principales 200</div>
+        <div class="check">CSV validado</div>
+        <div class="check">Grupos y borrado en cascada</div>
+        <div class="check">Análisis, diff e IA</div>
+        <div class="check">Histórico y tendencias</div>
+        <div class="check">Respaldo / restauración</div>
+        <div class="check">Datos locales y limpios</div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top: 6mm;">Cómo ejecutar</h3>
+  <div class="code"><span class="p">PS&gt;</span> dotnet restore<br><span class="p">PS&gt;</span> dotnet run --urls http://localhost:5135<br><span class="p">→</span> abrir http://localhost:5135 · la base se crea sola en la raíz del proyecto</div>
+
+  <div class="callout" style="margin-top: 5mm;"><b>Criterio de éxito:</b> que un docente pueda pasar de una lista de estudiantes a una decisión documentada, con evidencia suficiente para conversar con el estudiante, en menos tiempo y con menos sesgo.</div>
+
+  <h3 style="margin-top: 5mm;">Rúbrica cubierta</h3>
+  <table class="table rubric-table">
+    <thead><tr><th>Criterio</th><th>Evidencia en este documento</th><th>Páginas</th></tr></thead>
+    <tbody>
+      <tr><td>Nombre del proyecto</td><td>Portada y ficha del proyecto con el nombre completo y su subtítulo.</td><td>01–02</td></tr>
+      <tr><td>Descripción</td><td>Problema, qué hace, valor, alcance y límites explícitos.</td><td>02</td></tr>
+      <tr><td>Pantallas + lógica</td><td>Flujo, inventario, seis capturas reales y reglas de cada pantalla.</td><td>03–09</td></tr>
+      <tr><td>Base de datos 3FN</td><td>Diagrama, cardinalidades, índices, diccionario y análisis de normalización.</td><td>10–11</td></tr>
+      <tr><td>Arquitectura y tecnologías</td><td>Capas, stack, frontera local-first y flujo de una comparación.</td><td>12–13</td></tr>
+    </tbody>
+  </table>
+
+  <p class="small" style="margin-top:3mm;"><b>Próximo paso natural:</b> probar el flujo con un curso real, recoger tiempos de revisión y ajustar los umbrales de priorización con el docente antes de agregar autenticación o integración con LMS.</p>
+
+  <div class="foot"><span><b>Analizador de Plagios</b> · Avance 1</span><span>Flujo, límites y cierre</span><span class="pnum">13</span></div>
+</section>
+
+</body>
+</html>

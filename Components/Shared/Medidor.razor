@@ -1,0 +1,29 @@
+@using System.Globalization
+
+<div class="gauge @Tipo">
+    <div class="gauge-ring" style="--pct:@ValorTexto; --gauge-color:@Color">
+        <div class="gauge-core">
+            <strong>@ValorTexto</strong><span>%</span>
+        </div>
+    </div>
+    <div class="gauge-info">
+        <span>@Titulo</span>
+        @if (!string.IsNullOrWhiteSpace(Subtitulo))
+        {
+            <small>@Subtitulo</small>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public double Valor { get; set; }
+    [Parameter] public string Titulo { get; set; } = "Indicador";
+    [Parameter] public string? Subtitulo { get; set; }
+    [Parameter] public string Tipo { get; set; } = "similitud";
+
+    private string ValorTexto => Math.Clamp(Valor, 0, 100).ToString("0.#", CultureInfo.InvariantCulture);
+
+    private string Color => Tipo.Equals("ia", StringComparison.OrdinalIgnoreCase)
+        ? Valor switch { >= 70 => "var(--danger)", >= 45 => "var(--warn)", >= 25 => "var(--info)", _ => "var(--ok)" }
+        : Valor switch { >= 80 => "var(--danger)", >= 60 => "var(--warn)", >= 35 => "var(--info)", _ => "var(--ok)" };
+}

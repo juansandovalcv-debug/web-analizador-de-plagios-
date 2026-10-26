@@ -1,0 +1,195 @@
+@using System.IO
+@inject IJSRuntime JS
+@inject ILogger<FileDropZone> Logger
+
+<div id="@_zoneId" class="dropzone @(Disabled ? "is-disabled" : null) @(_archivo is null ? null : "has-file")" aria-disabled="@Disabled">
+    @if (_archivo is null)
+    {
+        <div class="dropzone-icon">
+            <Icon Nombre="upload" Tamano="26" />
+        </div>
+        <strong class="dropzone-title">@Etiqueta</strong>
+        <span class="dropzone-text">@Descripcion</span>
+        <span class="dropzone-hint">Haz clic o arrastra el archivo aquí · @TextoLimite</span>
+    }
+    else
+    {
+        <div class="dropzone-file">
+            <div class="dropzone-icon dropzone-icon-done">
+                <Icon Nombre="@(_archivo.EsImagen ? "image" : "file")" Tamano="24" />
+            </div>
+            <div class="dropzone-file-info">
+                <strong>@_archivo.Nombre</strong>
+                <span>@FormatearTamano(_archivo.TamanoBytes) · @(_archivo.EsImagen ? "Imagen para OCR" : "Código/texto")</span>
+                <small>@Descripcion</small>
+            </div>
+            <button type="button" class="icon-btn danger dropzone-clear" title="Quitar archivo"
+                    @onclick:stopPropagation="true" @onclick="QuitarAsync" disabled="@Disabled">
+                <Icon Nombre="x" Tamano="16" />
+            </button>
+        </div>
+    }
+</div>
+
+<InputFile id="@_inputId"
+           class="visually-hidden"
+           Accept="@Aceptar"
+           MaxAllowedSize="TamanoMaximo"
+           Disabled="@Disabled"
+           OnChange="SeleccionarAsync"
+           aria-hidden="true"
+           tabindex="-1" />
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="inline-error"><Icon Nombre="alert" Tamano="15" /> @_error</div>
+}
+
+@code {
+    [Parameter] public string Etiqueta { get; set; } = "Arrastra un archivo";
+    [Parameter] public string Descripcion { get; set; } = "Archivo .cs, .txt o captura de código";
+    [Parameter] public string Aceptar { get; set; } = ".cs,.txt,.png,.jpg,.jpeg,.bmp,.tif,.tiff,.webp";
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public long TamanoMaximo { get; set; } = 10 * 1024 * 1024;
+    [Parameter] public EventCallback<ArchivoSeleccionado?> OnArchivo { get; set; }
+
+    private readonly string _sufijo = Guid.NewGuid().ToString("N");
+    private string _zoneId => $"drop-zone-{_sufijo}";
+    private string _inputId => $"drop-input-{_sufijo}";
+    private ArchivoSeleccionado? _archivo;
+    private string? _error;
+
+    private string TextoLimite => TamanoMaximo >= 1024 * 1024
+        ? $"máx. {TamanoMaximo / (1024 * 1024)} MB"
+        : $"máx. {TamanoMaximo / 1024} KB";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("plagio.drop.bind", _zoneId, _inputId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "No se pudo inicializar el drag & drop del componente");
+        }
+    }
+
+    private async Task SeleccionarAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var archivo = e.File;
+        if (archivo is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var extension = Path.GetExtension(archivo.Name).ToLowerInvariant();
+            var permitidas = Aceptar.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(a => a.Trim().ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (permitidas.Count > 0 && !permitidas.Contains(extension))
+            {
+                _error = $"Formato no permitido ({extension}). Use: {Aceptar}";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            if (archivo.Size == 0)
+            {
+                _error = "El archivo está vacío.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            if (archivo.Size > TamanoMaximo)
+            {
+                _error = $"El archivo supera el límite de {TextoLimite}.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            await using var entrada = archivo.OpenReadStream(TamanoMaximo);
+            using var memoria = new MemoryStream();
+            await entrada.CopyToAsync(memoria);
+
+            _archivo = new ArchivoSeleccionado
+            {
+                Nombre = Path.GetFileName(archivo.Name),
+                TipoContenido = archivo.ContentType,
+                UltimaModificacion = archivo.LastModified,
+                TamanoBytes = archivo.Size,
+                Bytes = memoria.ToArray(),
+                EsImagen = AlmacenArchivos.EsImagen(archivo.Name)
+            };
+
+            await OnArchivo.InvokeAsync(_archivo);
+        }
+        catch (IOException ex)
+        {
+            _error = $"No se pudo leer el archivo: {ex.Message}";
+            Logger.LogWarning(ex, "Error leyendo archivo seleccionado");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error inesperado al leer el archivo: {ex.Message}";
+            Logger.LogError(ex, "Error procesando archivo seleccionado");
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async Task ReiniciarAsync()
+    {
+        _archivo = null;
+        _error = null;
+        try
+        {
+            await JS.InvokeVoidAsync("plagio.drop.clear", _inputId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "No se pudo limpiar el input de archivos");
+        }
+
+        await OnArchivo.InvokeAsync(null);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task QuitarAsync() => ReiniciarAsync();
+
+    private static string FormatearTamano(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024d:0.#} KB";
+        }
+
+        return $"{bytes / (1024d * 1024d):0.##} MB";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("plagio.drop.unbind", _zoneId);
+        }
+        catch
+        {
+            // El circuito puede haberse cerrado; no hay nada que limpiar.
+        }
+    }
+}

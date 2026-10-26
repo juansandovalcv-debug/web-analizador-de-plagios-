@@ -1,0 +1,49 @@
+@if (!string.IsNullOrWhiteSpace(Titulo))
+{
+    <div class="code-header">
+        <span><Icon Nombre="code" Tamano="15" /> @Titulo</span>
+        <span class="muted">@Lineas.Count línea(s)</span>
+    </div>
+}
+
+<div class="code-scroll" style="max-height:@Altura">
+    @if (Lineas.Count == 0)
+    {
+        <div class="empty-mini">Sin contenido para mostrar.</div>
+    }
+    else
+    {
+        <table class="code-table" aria-label="@(Titulo ?? "Código fuente")">
+            <tbody>
+                @for (var i = 0; i < Lineas.Count; i++)
+                {
+                    <tr>
+                        <td class="code-ln">@(i + 1)</td>
+                        <td class="code-lc"><span>@Lineas[i]</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (Truncado)
+        {
+            <div class="empty-mini">Vista limitada a las primeras @MaxLineas líneas.</div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string? Codigo { get; set; }
+    [Parameter] public string? Titulo { get; set; }
+    [Parameter] public string Altura { get; set; } = "520px";
+    [Parameter] public int MaxLineas { get; set; } = 3000;
+
+    private List<string> Lineas { get; set; } = new();
+    private bool Truncado { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        var todas = AnalizadorSimilitud.NormalizarLineas(Codigo ?? string.Empty).ToList();
+        Truncado = todas.Count > MaxLineas;
+        Lineas = todas.Take(MaxLineas).ToList();
+    }
+}

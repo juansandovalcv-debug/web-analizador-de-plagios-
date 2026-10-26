@@ -1,0 +1,329 @@
+﻿@page "/"
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject PreferenciasUi Prefs
+@inject ILogger<Home> Logger
+
+<PageTitle>Inicio · Analizador de Plagios</PageTitle>
+
+<div class="page-header">
+    <div>
+        <span class="eyebrow">Panel general</span>
+        <h1>Bienvenido al analizador</h1>
+        <p class="page-subtitle">Compare entregas de código, revise señales de generación automática y documente la defensa oral. Todo se procesa en este equipo.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-ghost" href="grupos">
+            <Icon Nombre="users" Tamano="16" /> Gestionar grupos
+        </a>
+        <a class="btn btn-primary" href="analisis">
+            <Icon Nombre="scan" Tamano="16" /> Analizar entrega
+        </a>
+    </div>
+</div>
+
+@if (_cargando)
+{
+    <div class="loading-state"><span class="spinner large"></span> Cargando el panel…</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-error">
+        <Icon Nombre="alert" Tamano="18" />
+        <div>
+            <strong>No se pudo cargar el panel.</strong>
+            <div>@_error</div>
+        </div>
+    </div>
+}
+else
+{
+    <section class="hero">
+        <div class="hero-content">
+            <div>
+                <span class="hero-badge"><Icon Nombre="shield" Tamano="13" /> Evidencia local y trazable</span>
+                <h1>De la similitud a una decisión académica fundamentada.</h1>
+                <p>
+                    El motor combina normalización de C#, Levenshtein sobre tokens, shingles y diff lateral.
+                    La probabilidad de IA es explicable señal por señal, nunca una sentencia automática.
+                </p>
+                <div class="hero-actions">
+                    <a class="btn btn-primary btn-lg" href="analisis"><Icon Nombre="upload" Tamano="17" /> Cargar y comparar</a>
+                    <a class="btn btn-ghost btn-lg" href="grupos"><Icon Nombre="users" Tamano="17" /> Importar estudiantes</a>
+                </div>
+            </div>
+            @if (_evaluaciones > 0)
+            {
+                <div class="gauge-stack" style="min-width: 270px;">
+                    <Medidor Valor="@_promedioSimilitud" Titulo="Similitud promedio"
+                              Subtitulo="Promedio de todas las entregas" Tipo="similitud" />
+                    <Medidor Valor="@_promedioIa" Titulo="Probabilidad IA promedio"
+                              Subtitulo="Señales heurísticas del corpus" Tipo="ia" />
+                </div>
+            }
+            else
+            {
+                <div class="card" style="min-width: 260px; background: rgba(8, 16, 24, .45);">
+                    <div class="stat-label">Primer paso</div>
+                    <h3 style="margin: 8px 0;">Cree un grupo y su lista de estudiantes</h3>
+                    <p class="small mb-2">Luego cargue dos archivos .cs para ver el diff y el análisis.</p>
+                    <a class="btn btn-secondary btn-sm" href="grupos"><Icon Nombre="plus" Tamano="14" /> Crear grupo</a>
+                </div>
+            }
+        </div>
+    </section>
+
+    <div class="stat-grid">
+        <article class="stat-card">
+            <div class="stat-top"><span class="stat-label">Grupos activos</span><span class="stat-icon"><Icon Nombre="layers" Tamano="17" /></span></div>
+            <div class="stat-value">@_grupos</div>
+            <div class="stat-hint">@_estudiantes estudiante(s) registrados</div>
+        </article>
+        <article class="stat-card">
+            <div class="stat-top"><span class="stat-label">Entregas analizadas</span><span class="stat-icon"><Icon Nombre="file" Tamano="17" /></span></div>
+            <div class="stat-value">@_evaluaciones</div>
+            <div class="stat-hint">@_historiales ejecución(es) en historial</div>
+        </article>
+        <article class="stat-card">
+            <div class="stat-top"><span class="stat-label">Alertas altas</span><span class="stat-icon"><Icon Nombre="alert" Tamano="17" /></span></div>
+            <div class="stat-value">@_alertas</div>
+            <div class="stat-hint">Similitud o IA ≥ 60%</div>
+        </article>
+        <article class="stat-card">
+            <div class="stat-top"><span class="stat-label">Cobertura de defensa</span><span class="stat-icon"><Icon Nombre="book" Tamano="17" /></span></div>
+            <div class="stat-value">@_alertas <small>/ @_evaluaciones</small></div>
+            <div class="stat-hint">Entregas que requieren revisión oral</div>
+        </article>
+    </div>
+
+    <div class="section-heading">
+        <div>
+            <h2>Actividad reciente</h2>
+            <p>Últimos análisis guardados, con su mejor coincidencia y probabilidad heurística.</p>
+        </div>
+        <a class="link-action" href="resultados">Ver todos <Icon Nombre="chevron-right" Tamano="14" /></a>
+    </div>
+
+    <div class="grid-sidebar">
+        <div class="stack">
+            @if (_recientes.Count == 0)
+            {
+                <div class="empty-state">
+                    <Icon Nombre="scan" Tamano="32" />
+                    <strong>Aún no hay entregas analizadas</strong>
+                    <span>Cree un grupo, importe estudiantes y cargue dos archivos para comenzar.</span>
+                    <a class="btn btn-secondary btn-sm mt-2" href="analisis">Ir al panel de análisis</a>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Estudiante</th>
+                                <th>Archivo</th>
+                                <th>Similitud</th>
+                                <th>IA</th>
+                                <th>Fecha</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _recientes)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="student-name">
+                                            <strong>@Prefs.NombreVisible(item.EstudianteId, item.EstudianteNombre)</strong>
+                                            <span>@Prefs.CarnetVisible(item.EstudianteId, item.EstudianteCarnet)</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="primary-cell">@item.NombreArchivo</div>
+                                        <span class="tiny muted">@item.GrupoNombre · C@(@item.Computo)</span>
+                                    </td>
+                                    <td>
+                                        <div class="metric-cell">
+                                            <span class="metric-number @ClaseRiesgo(item.Similitud, 80, 60)">@item.Similitud.ToString("F1")%</span>
+                                            <div class="progress @ClaseBarra(item.Similitud, 80, 60)"><span style="width:@Porcentaje(item.Similitud)"></span></div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="metric-cell">
+                                            <span class="metric-number @(item.ProbabilidadIA >= 60 ? "warn" : item.ProbabilidadIA >= 40 ? "info" : "ok")">@item.ProbabilidadIA.ToString("F1")%</span>
+                                            <div class="progress @(item.ProbabilidadIA >= 60 ? "warn" : item.ProbabilidadIA >= 40 ? "info" : "ok")"><span style="width:@Porcentaje(item.ProbabilidadIA)"></span></div>
+                                        </div>
+                                    </td>
+                                    <td class="nowrap tiny muted">@item.FechaAnalisis.ToLocalTime().ToString("dd/MM/yy HH:mm")</td>
+                                    <td class="actions-cell"><a class="btn btn-ghost btn-sm" href="@($"resultados/{item.Id}")">Abrir</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <div class="card">
+                <div class="panel-heading">
+                    <div>
+                        <h3><Icon Nombre="target" Tamano="17" /> Cómo se calcula el resultado</h3>
+                        <p>Tres señales complementarias para evitar falsos positivos.</p>
+                    </div>
+                </div>
+                <div class="grid-3">
+                    <div>
+                        <span class="badge chip-accent">55%</span>
+                        <h4 style="margin:8px 0 4px; font-size:.84rem;">Levenshtein de tokens</h4>
+                        <p class="small mb-0">Compara estructura tras quitar comentarios, literales y renombrar variables.</p>
+                    </div>
+                    <div>
+                        <span class="badge chip-info">25%</span>
+                        <h4 style="margin:8px 0 4px; font-size:.84rem;">Shingles Jaccard</h4>
+                        <p class="small mb-0">Detecta bloques de cuatro tokens reutilizados aunque cambie el orden.</p>
+                    </div>
+                    <div>
+                        <span class="badge chip-warn">20%</span>
+                        <h4 style="margin:8px 0 4px; font-size:.84rem;">Levenshtein por líneas</h4>
+                        <p class="small mb-0">Mide la edición real del texto y alimenta el visor lado a lado.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stack">
+            <div class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3><Icon Nombre="chart" Tamano="17" /> Distribución por cómputo</h3>
+                        <p>Entregas registradas en cada ronda.</p>
+                    </div>
+                </div>
+                <div class="computo-grid">
+                    @for (var c = 1; c <= 3; c++)
+                    {
+                        var total = _porComputo.GetValueOrDefault(c);
+                        <div class="computo-card">
+                            <span>Cómputo @c</span>
+                            <strong>@total</strong>
+                            <small>entrega(s)</small>
+                        </div>
+                    }
+                </div>
+                <div class="form-divider"></div>
+                <div class="summary-list">
+                    <div class="summary-row"><span>Grupos creados</span><strong>@_grupos</strong></div>
+                    <div class="summary-row"><span>Estudiantes</span><strong>@_estudiantes</strong></div>
+                    <div class="summary-row"><span>Historiales</span><strong>@_historiales</strong></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3><Icon Nombre="sparkles" Tamano="17" /> Accesos rápidos</h3>
+                        <p>Flujo recomendado para una revisión completa.</p>
+                    </div>
+                </div>
+                <div class="stack-sm">
+                    <a class="btn btn-ghost btn-block" href="grupos"><Icon Nombre="users" Tamano="16" /> 1. Crear grupo e importar CSV</a>
+                    <a class="btn btn-ghost btn-block" href="analisis"><Icon Nombre="upload" Tamano="16" /> 2. Cargar dos entregas</a>
+                    <a class="btn btn-ghost btn-block" href="resultados"><Icon Nombre="list" Tamano="16" /> 3. Revisar resultados y metadatos</a>
+                    <a class="btn btn-ghost btn-block" href="historico"><Icon Nombre="chart" Tamano="16" /> 4. Ver evolución por cómputo</a>
+                </div>
+                <div class="metadata-note mt-3">
+                    <Icon Nombre="lock" Tamano="14" />
+                    <span>El procesamiento y la base SQLite permanecen en este equipo. No hay llamadas a servicios de IA externos.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _cargando = true;
+    private string? _error;
+    private int _grupos;
+    private int _estudiantes;
+    private int _evaluaciones;
+    private int _historiales;
+    private int _alertas;
+    private double _promedioSimilitud;
+    private double _promedioIa;
+    private List<EvaluacionResumen> _recientes = new();
+    private Dictionary<int, int> _porComputo = new();
+
+    protected override void OnInitialized()
+    {
+        Prefs.Cambio += AlCambiarPreferencias;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _grupos = await db.Grupos.CountAsync();
+            _estudiantes = await db.Estudiantes.CountAsync();
+            _evaluaciones = await db.Evaluaciones.CountAsync();
+            _historiales = await db.Historiales.CountAsync();
+            _promedioSimilitud = await db.Evaluaciones.Select(e => (double?)e.Similitud).AverageAsync() ?? 0;
+            _promedioIa = await db.Evaluaciones.Select(e => (double?)e.ProbabilidadIA).AverageAsync() ?? 0;
+            _alertas = await db.Evaluaciones.CountAsync(e => e.Similitud >= 60 || e.ProbabilidadIA >= 60);
+
+            _recientes = await db.Evaluaciones
+                .AsNoTracking()
+                .OrderByDescending(e => e.FechaAnalisis)
+                .Take(6)
+                .Select(e => new EvaluacionResumen
+                {
+                    Id = e.Id,
+                    EstudianteId = e.EstudianteId,
+                    EstudianteNombre = e.Estudiante != null ? e.Estudiante.Nombre : "Sin estudiante",
+                    EstudianteCarnet = e.Estudiante != null ? e.Estudiante.Carnet : string.Empty,
+                    GrupoNombre = e.Grupo != null ? e.Grupo.Nombre : string.Empty,
+                    Computo = e.Grupo != null ? e.Grupo.Computo : 0,
+                    NombreArchivo = e.NombreArchivo,
+                    Similitud = e.Similitud,
+                    ProbabilidadIA = e.ProbabilidadIA,
+                    FechaAnalisis = e.FechaAnalisis
+                })
+                .ToListAsync();
+
+            _porComputo = await db.Evaluaciones
+                .Where(e => e.Grupo != null)
+                .GroupBy(e => e.Grupo!.Computo)
+                .Select(g => new { Computo = g.Key, Total = g.Count() })
+                .ToDictionaryAsync(x => x.Computo, x => x.Total);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cargando el panel de inicio");
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private static string ClaseRiesgo(double valor, double alto, double medio)
+        => valor >= alto ? "danger" : valor >= medio ? "warn" : valor >= 35 ? "info" : "ok";
+
+    private static string ClaseBarra(double valor, double alto, double medio)
+        => valor >= alto ? "danger" : valor >= medio ? "warn" : valor >= 35 ? "info" : "ok";
+
+    private static string Porcentaje(double valor)
+        => $"{Math.Clamp(valor, 0, 100).ToString("0.#", CultureInfo.InvariantCulture)}%";
+
+    private void AlCambiarPreferencias() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Prefs.Cambio -= AlCambiarPreferencias;
+}

@@ -1,0 +1,33 @@
+﻿<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#081018" />
+    <meta name="description" content="Analizador local de plagio y señales de IA para entregas de código C#." />
+    <base href="/" />
+    <script>
+        (function () {
+            try {
+                var tema = localStorage.getItem("plagio.theme") || "dark";
+                document.documentElement.setAttribute("data-theme", tema === "light" ? "light" : "dark");
+            } catch (e) { }
+        })();
+    </script>
+    <ResourcePreloader />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["web_analizador_de_plagios.styles.css"]" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <ImportMap />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <ReconnectModal />
+    <script src="@Assets["js/app.js"]"></script>
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+
+</html>
