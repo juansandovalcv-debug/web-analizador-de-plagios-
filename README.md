@@ -28,7 +28,8 @@ La herramienta **no emite un veredicto automático**: entrega evidencia para que
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - Windows para la ejecución probada con las dependencias nativas de Tesseract.
-- No requiere servidor de base de datos ni servicios en la nube.
+- SQL Server LocalDB (`MSSQLLocalDB`), incluido con SQL Server Express.
+- No requiere servicios en la nube.
 
 ## Ejecutar en local
 
@@ -39,7 +40,19 @@ dotnet run --urls http://localhost:5135
 
 Abrir <http://localhost:5135>.
 
-En el primer arranque se crea automáticamente `sistema_plagio.db` y la carpeta `App_Data/uploads`. Ambos se excluyen de Git porque son datos locales.
+La cadena de conexión vive en `appsettings.json` (`ConnectionStrings:DefaultConnection`) y apunta a LocalDB: `Server=(localdb)\MSSQLLocalDB;Database=AnalizadorPlagios`. En el primer arranque se aplican las migraciones de EF Core, se crea la base `AnalizadorPlagios` y se prepara `App_Data/uploads` para las entregas.
+
+Para aplicar las migraciones manualmente:
+
+```powershell
+dotnet ef database update
+```
+
+`Data/AppDbContextFactory.cs` permite generar migraciones sin levantar el servidor web:
+
+```powershell
+dotnet ef migrations add NombreMigracion --output-dir Data/Migrations
+```
 
 ## Rutas principales
 
@@ -66,7 +79,7 @@ tessdata/            Datos de idioma para OCR
 
 ## Privacidad y límites
 
-- La base SQLite y los archivos de las entregas permanecen en el equipo local.
+- La base de datos SQL Server LocalDB y los archivos de las entregas permanecen en el equipo local.
 - No se envían archivos a APIs externas.
 - La probabilidad de IA es una señal heurística; el OCR puede equivocarse y su confianza se informa.
 - Esta versión no incluye autenticación multiusuario ni integración con un LMS.
@@ -75,5 +88,6 @@ tessdata/            Datos de idioma para OCR
 
 - Compilación verificada con **0 warnings / 0 errores**.
 - Rutas principales verificadas en ejecución.
-- El repositorio no incluye datos de demostración; la base se crea vacía.
+- El repositorio no incluye datos de demostración; la base se crea vacía mediante migraciones.
+- Relaciones configuradas explícitamente con `HasForeignKey` sobre `GrupoId`, `EstudianteId` y `EvaluacionId`.
 - El PDF de `docs/avance-1/` es el entregable del primer avance.

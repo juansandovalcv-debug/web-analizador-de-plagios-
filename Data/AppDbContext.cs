@@ -47,7 +47,7 @@ public class AppDbContext : DbContext
             entity.HasOne(e => e.Grupo)
                 .WithMany(g => g.Evaluaciones)
                 .HasForeignKey(e => e.GrupoId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne(e => e.Estudiante)
                 .WithMany(s => s.Evaluaciones)
                 .HasForeignKey(e => e.EstudianteId)
@@ -55,7 +55,7 @@ public class AppDbContext : DbContext
             entity.HasOne(e => e.ReferenciaEvaluacion)
                 .WithMany()
                 .HasForeignKey(e => e.ReferenciaEvaluacionId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
             entity.Property(e => e.FechaAnalisis).HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
         });
 
@@ -71,11 +71,11 @@ public class AppDbContext : DbContext
             entity.HasOne(h => h.Estudiante)
                 .WithMany(e => e.Historiales)
                 .HasForeignKey(h => h.EstudianteId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne(h => h.Grupo)
                 .WithMany(g => g.Historiales)
                 .HasForeignKey(h => h.GrupoId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.NoAction);
             entity.Property(h => h.Fecha).HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
         });
     }

@@ -8,9 +8,6 @@ obj/
 *.sln.docstates
 
 # Datos locales de la aplicación
-sistema_plagio.db
-sistema_plagio.db-shm
-sistema_plagio.db-wal
 App_Data/
 uploads/
 

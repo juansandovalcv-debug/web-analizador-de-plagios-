@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using web_analizador_de_plagios.Components;
 using web_analizador_de_plagios.Data;
@@ -10,17 +9,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-var rutaBaseDatos = Path.Combine(builder.Environment.ContentRootPath, "sistema_plagio.db");
-var cadenaConexion = new SqliteConnectionStringBuilder
-{
-    DataSource = rutaBaseDatos,
-    Mode = SqliteOpenMode.ReadWriteCreate,
-    ForeignKeys = true,
-    Pooling = true
-}.ToString();
+var cadenaConexion = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException(
+        "Falta la cadena de conexión ConnectionStrings:DefaultConnection para SQL Server.");
 
 builder.Services.AddDbContextFactory<AppDbContext>(opciones =>
-    opciones.UseSqlite(cadenaConexion, sqlite => sqlite.CommandTimeout(30)));
+    opciones.UseSqlServer(cadenaConexion, sqlServer =>
+    {
+        sqlServer.CommandTimeout(30);
+    }));
 
 builder.Services.AddSingleton<NormalizadorCodigo>();
 builder.Services.AddSingleton<AnalizadorEstructura>();
@@ -62,14 +59,17 @@ static async Task InicializarBaseDatosAsync(WebApplication app)
         await using var scope = app.Services.CreateAsyncScope();
         var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
         await using var db = await factory.CreateDbContextAsync();
-        await db.Database.EnsureCreatedAsync();
-        await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
-        await db.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys=ON;");
-        app.Logger.LogInformation("Base de datos SQLite lista en {Ruta}", db.Database.GetDbConnection().DataSource);
+        await db.Database.MigrateAsync();
+        app.Logger.LogInformation(
+            "Base de datos SQL Server lista: {Servidor}/{BaseDatos}",
+            db.Database.GetDbConnection().DataSource,
+            db.Database.GetDbConnection().Database);
     }
     catch (Exception ex)
     {
-        app.Logger.LogCritical(ex, "No se pudo inicializar la base de datos SQLite");
-        throw new InvalidOperationException("La aplicación no pudo inicializar sistema_plagio.db. Revise permisos de escritura en la carpeta del proyecto.", ex);
+        app.Logger.LogCritical(ex, "No se pudo inicializar la base de datos SQL Server");
+        throw new InvalidOperationException(
+            "La aplicación no pudo inicializar la base de datos SQL Server. Revise ConnectionStrings:DefaultConnection y que SQL Server esté disponible.",
+            ex);
     }
 }
